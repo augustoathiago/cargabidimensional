@@ -1,220 +1,149 @@
-import streamlit as st13y, F13)
-dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
-dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
-
-DATA = {
-    "xMin": xMin, "xMax": xMax, "yMin": yMin, "yMax": yMax,
-    "xticks": xticks, "yticks": yticks,
-    "p1": {"x": x1, "y": y1, "q": q1, "qText": br_charge_canvas_from_uC(q1_uC)},
-    "p2": {"x": x2, "y": y2, "q": q2, "qText": br_charge_canvas_from_uC(q2_uC)},
-    "p3": {"x": x3, "y": y3, "q": q3, "qText": br_charge_canvas_from_uC(q3_uC)},
-    "vec": {
-        "F13": {"dx": dx13, "dy": dy13},
-        "F23": {"dx": dx23, "dy": dy23},
-        "Fr":  {"dx": dxr,  "dy": dyr},
-    }
-}
-
-# ⚠️ Note: NÃO é f-string. A injeção do DATA é por replace.
-CANVAS_HTML = """
-<div id="canvasWrap" style="width:100%; overflow:auto; -webkit-overflow-scrolling:touch; cursor:grab; user-select:none; touch-action:pan-x pan-y;">
-  <canvas id="canvas" width="1050" height="560" style="background:white; border:1px solid #eee; display:block;"></canvas>
-</div>
-
-<script>
-const DATA = __DATA__;
-
-const wrap = document.getElementById("canvasWrap");
-let isDown=false, startX=0, startY=0, startScrollLeft=0, startScrollTop=0, activePointerId=null;
-
-wrap.addEventListener("pointerdown",(e)=>{
-  if(e.pointerType==="mouse" && e.button!==0) return;
-  isDown=true; activePointerId=e.pointerId; wrap.setPointerCapture(activePointerId);
-  startX=e.clientX; start
+import streamlit as st
 import streamlit.components.v1 as components
 import math
-import json
 
-st.set_page_config(page_title="Simulador Força Eletrostática (2D)", layout="wide")
+st.set_page_config(page_title="Simulador Força Eletrostática 2D", layout="wide")
 
-# ===================== Helpers =====================
+K = 9e9
+
+# ===================== Funções =====================
 
 def sig(x, n=2):
-    if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
+    if x == 0:
         return 0.0
     return float(f"{x:.{n}g}")
 
-def br_decimal(s: str) -> str:
-    return s.replace(".", ",")
+def coulomb_force_2d(qi, qj, xi, yi, xj, yj):
+    dx = xi - xj
+    dy = yi - yj
+    r = math.hypot(dx, dy)
+    Fx = K * qi * qj * dx / r**3
+    Fy = K * qi * qj * dy / r**3
+    F = math.hypot(Fx, Fy)
+    theta = math.degrees(math.atan2(Fy, Fx))
+    return Fx, Fy, F, theta
 
-_sup_map = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
-
-def sci_parts(x, n=2):
+def sci(x):
     if x == 0:
-        return 0.0, 0
+        return "0"
     exp = int(math.floor(math.log10(abs(x))))
-    mant = x / (10 ** exp)
-    mant = float(f"{mant:.{n}g}")
-    if abs(mant) >= 10:
-        mant /= 10
-        exp += 1
-    return mant, exp
-
-def br_sci_force_text(x, n=2, unit="N"):
-    if x == 0:
-        out = "0"
-    else:
-        mant, exp = sci_parts(x, n=n)
-        mant_s = br_decimal(f"{mant:.{n}g}")
-        out = f"{mant_s}×10{str(exp).translate(_sup_map)}"
-    return f"{out} {unit}".strip()
-
-def fmt_uC_br(q_uC: float) -> str:
-    return f"{round(q_uC, 2):.2f}".replace(".", ",")
-
-def latex_charge_C_from_uC(q_uC: float) -> str:
-    if math.isclose(q_uC, 0.0, abs_tol=0.0):
-        return r"0"
-    mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
-    return rf"{mant}\times10^{{-6}}"
-
-def fmt_pos_br(x: float) -> str:
-    return f"{round(x, 1):.1f}".replace(".", ",")
-
-def br_charge_canvas_from_uC(q_uC: float) -> str:
-    if math.isclose(q_uC, 0.0, abs_tol=0.0):
-        return "0 C"
-    mant_s = fmt_uC_br(q_uC)
-    exp = -6
-    return f"{mant_s}×10{str(exp).translate(_sup_map)} C"
-
-def safe_hypot(x, y):
-    return math.sqrt(x*x + y*y)
-
-def br_angle_deg(theta_deg: float) -> str:
-    return br_decimal(f"{theta_deg:.1f}")
-
-def latex_r_2d_from_positions(xa, ya, xb, yb):
-    dx = round(xa, 1) - round(xb, 1)
-    dy = round(ya, 1) - round(yb, 1)
-    r = math.sqrt(dx*dx + dy*dy)
-    dxs = br_decimal(f"{dx:.1f}").replace("-", "{-}")
-    dys = br_decimal(f"{dy:.1f}").replace("-", "{-}")
-    rs  = br_decimal(f"{r:.2f}")
-    return dxs, dys, rs
-
-# ===================== Física 2D =====================
-
-def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
-    rx = xi - xj
-    ry = yi - yj
-    r = math.sqrt(rx*rx + ry*ry)
-    if math.isclose(r, 0.0, abs_tol=0.0):
-        return 0.0, 0.0, 0.0
-    coef = K * qi * qj / (r**3)
-    Fx = coef * rx
-    Fy = coef * ry
-    return Fx, Fy, r
+    mant = x / 10**exp
+    return f"{mant:.2f}".replace(".", ",") + f"×10{str(exp).translate(str.maketrans('0123456789-','⁰¹²³⁴⁵⁶⁷⁸⁹⁻'))}"
 
 # ===================== Cabeçalho =====================
 
-col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
-with col_logo:
-    try:
-        st.image("logo_maua.png", use_container_width=True)
-    except Exception:
-        st.warning("Arquivo 'logo_maua.png' não encontrado na raiz do repositório.")
-with col_title:
-    st.title("Simulador Força Eletrostática Bidimensional (x,y)")
-    st.write(
-        "Veja as forças aplicadas na partícula carregada **3** quando posicionada no plano "
-        "próxima a outras duas partículas carregadas **1** e **2**."
-    )
-    st.markdown("**Desafio: encontre uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fᵣ ~ 0).**")
+st.title("Simulador de Força Eletrostática Bidimensional")
+st.markdown("Interações entre três partículas carregadas no **plano x–y**.")
 
 # ===================== Controles =====================
 
-st.header("Definições das Partículas (2D)")
+st.header("Definições das Partículas")
 
-col1, col2, col3 = st.columns(3)
+cols = st.columns(3)
+qmin, qmax = -5.0, 5.0
+xmin, xmax = -10.0, 10.0
 
-qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
-xmin_slider, xmax_slider = -10.0, 10.0
-ymin_slider, ymax_slider = -10.0, 10.0
-
-with col1:
+with cols[0]:
     st.subheader("Partícula 1")
-    x1 = st.slider("Posição x₁ (m)", xmin_slider, xmax_slider, -4.0, 0.1, format="%.1f")
-    y1 = st.slider("Posição y₁ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
-    q1_uC = st.slider("Carga q₁ (µC)", qmin_uC, qmax_uC, 2.0, qstep_uC, format="%.2f")
-    q1 = q1_uC * 1e-6
+    x1 = st.slider("x₁ (m)", xmin, xmax, -4.0, 0.1)
+    y1 = st.slider("y₁ (m)", xmin, xmax, 0.0, 0.1)
+    q1 = st.slider("q₁ (µC)", qmin, qmax, 2.0, 0.05) * 1e-6
 
-with col2:
+with cols[1]:
     st.subheader("Partícula 2")
-    x2 = st.slider("Posição x₂ (m)", xmin_slider, xmax_slider,  4.0, 0.1, format="%.1f")
-    y2 = st.slider("Posição y₂ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
-    q2_uC = st.slider("Carga q₂ (µC)", qmin_uC, qmax_uC, -2.0, qstep_uC, format="%.2f")
-    q2 = q2_uC * 1e-6
+    x2 = st.slider("x₂ (m)", xmin, xmax, 4.0, 0.1)
+    y2 = st.slider("y₂ (m)", xmin, xmax, 0.0, 0.1)
+    q2 = st.slider("q₂ (µC)", qmin, qmax, -2.0, 0.05) * 1e-6
 
-with col3:
+with cols[2]:
     st.subheader("Partícula 3")
-    x3 = st.slider("Posição x₃ (m)", xmin_slider, xmax_slider,  0.0, 0.1, format="%.1f")
-    y3 = st.slider("Posição y₃ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
-    q3_uC = st.slider("Carga q₃ (µC)", qmin_uC, qmax_uC,  1.0, qstep_uC, format="%.2f")
-    q3 = q3_uC * 1e-6
+    x3 = st.slider("x₃ (m)", xmin, xmax, 0.0, 0.1)
+    y3 = st.slider("y₃ (m)", xmin, xmax, 2.0, 0.1)
+    q3 = st.slider("q₃ (µC)", qmin, qmax, 1.0, 0.05) * 1e-6
 
-# Bloqueio de posições iguais
-pts = {(x1, y1), (x2, y2), (x3, y3)}
-if len(pts) < 3:
-    st.error("❌ As partículas **não podem** estar na mesma posição (mesmo ponto (x,y)). Ajuste as posições.")
-    st.stop()
+# ===================== Física =====================
 
-# ===================== Cálculos =====================
+Fx13, Fy13, F13, th13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1)
+Fx23, Fy23, F23, th23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2)
 
-K = 9.0e9
+Fxr = Fx13 + Fx23
+Fyr = Fy13 + Fy23
+Fr = math.hypot(Fxr, Fyr)
+thr = math.degrees(math.atan2(Fyr, Fxr))
 
-F13x_raw, F13y_raw, r13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1, K=K)
-F23x_raw, F23y_raw, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
+# ===================== Figura =====================
 
-# Componentes exibidas com 2 AS
-F13x = sig(F13x_raw, 2)
-F13y = sig(F13y_raw, 2)
-F23x = sig(F23x_raw, 2)
-F23y = sig(F23y_raw, 2)
+st.header("Figura – Sistema Bidimensional")
 
-# Resultante didática (soma usando componentes já exibidas)
-Frx = sig(F13x + F23x, 2)
-Fry = sig(F13y + F23y, 2)
+html = f"""
+<canvas id="c" width="700" height="700" style="border:1px solid #ddd"></canvas>
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
 
-# Módulos e ângulos
-F13 = sig(safe_hypot(F13x, F13y), 2)
-F23 = sig(safe_hypot(F23x, F23y), 2)
-Fr  = sig(safe_hypot(Frx,  Fry),  2)
+const W = c.width, H = c.height;
+const xmin = -10, xmax = 10, ymin = -10, ymax = 10;
 
-theta13 = math.degrees(math.atan2(F13y, F13x)) if not (F13x == 0 and F13y == 0) else 0.0
-theta23 = math.degrees(math.atan2(F23y, F23x)) if not (F23x == 0 and F23y == 0) else 0.0
-thetar  = math.degrees(math.atan2(Fry,  Frx))  if not (Frx  == 0 and Fry  == 0) else 0.0
+function X(x) {{ return (x - xmin)/(xmax-xmin)*W; }}
+function Y(y) {{ return H - (y - ymin)/(ymax-ymin)*H; }}
 
-equilibrio = (Frx == 0.0 and Fry == 0.0)
+ctx.clearRect(0,0,W,H);
 
-# ===================== Figura 2D (Canvas) =====================
+// eixos
+ctx.strokeStyle="#000";
+ctx.beginPath();
+ctx.moveTo(X(xmin), Y(0));
+ctx.lineTo(X(xmax), Y(0));
+ctx.moveTo(X(0), Y(ymin));
+ctx.lineTo(X(0), Y(ymax));
+ctx.stroke();
 
-st.header("Figura – Sistema Bidimensional (x,y)")
+// partículas
+function part(x,y,n,color){{
+ ctx.beginPath();
+ ctx.arc(X(x),Y(y),10,0,2*Math.PI);
+ ctx.fillStyle="#fff"; ctx.fill();
+ ctx.strokeStyle=color; ctx.lineWidth=3; ctx.stroke();
+ ctx.fillStyle="#000"; ctx.fillText(n,X(x)-3,Y(y)+4);
+}}
 
-xMin, xMax = -15.0, 15.0
-yMin, yMax = -12.0, 12.0
-xticks = list(range(-15, 16, 3))
-yticks = list(range(-12, 13, 3))
+part({x1},{y1},"1","red");
+part({x2},{y2},"2","blue");
+part({x3},{y3},"3","black");
 
-maxVec = max(F13, F23, Fr, 1e-30)
-Lmax = 150.0
+// vetor
+function arrow(x,y,dx,dy,color,label){{
+ ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=3;
+ ctx.beginPath(); ctx.moveTo(X(x),Y(y)); ctx.lineTo(X(x+dx),Y(y+dy)); ctx.stroke();
+ ctx.setLineDash([5,5]);
+ ctx.beginPath(); ctx.moveTo(X(x+dx),Y(y)); ctx.lineTo(X(x+dx),Y(y+dy)); ctx.stroke();
+ ctx.beginPath(); ctx.moveTo(X(x),Y(y)); ctx.lineTo(X(x+dx),Y(y)); ctx.stroke();
+ ctx.setLineDash([]);
+ ctx.fillText(label,X(x+dx)+5,Y(y+dy)+5);
+}}
 
-def vec_scale(Fmag):
-    return Lmax * (abs(Fmag) / maxVec)
+arrow({x3},{y3},{Fx13/Fr*2},{Fy13/Fr*2},"red","F13");
+arrow({x3},{y3},{Fx23/Fr*2},{Fy23/Fr*2},"blue","F23");
+arrow({x3},{y3},{Fxr/Fr*2},{Fyr/Fr*2},"green","Fr");
+</script>
+"""
+components.html(html, height=720)
 
-def force_to_pixel_dxdy(Fx, Fy, Fmag):
-    if Fmag == 0:
-        return 0.0, 0.0
-    s = vec_scale(Fmag) / Fmag
-    return Fx * s, -Fy * s  # y invertido no canvas
+# ===================== Resultados =====================
 
+st.header("Forças e Componentes")
+
+def bloco(titulo, Fx, Fy, F, th):
+    st.markdown(f"""
+**{titulo}**
+
+- \\(F = {sci(F)}\\,\\text{{N}}\\)
+- \\(F_x = {sci(Fx)}\\,\\text{{N}}\\)
+- \\(F_y = {sci(Fy)}\\,\\text{{N}}\\)
+- \\(\\theta = {th:.1f}^\\circ\\)
+""")
+
+c1, c2, c3 = st.columns(3)
+with c1: bloco("Força F₁₃", Fx13, Fy13, F13, th13)
+with c2: bloco("Força F₂₃", Fx23, Fy23, F23, th23)
+with c3: bloco("Força Resultante", Fxr, Fyr, Fr, thr)
