@@ -210,6 +210,7 @@ dx13, dy13 = force_to_pixel_dxdy(F13x, F13y, F13)
 dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
 dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
 
+
 html = f"""
 <div id="canvasWrap" style="
     width: 100%;
@@ -290,9 +291,9 @@ function Y(y) {{
 
 // ---------- grade e eixos ----------
 function drawAxes() {{
-  // grade
   ctx.strokeStyle = "#f0f0f0";
   ctx.lineWidth = 1;
+
   const xticks = {xticks};
   const yticks = {yticks};
 
@@ -333,6 +334,8 @@ function drawAxes() {{
   // ticks e rótulos
   ctx.fillStyle = "#111";
   ctx.font = "13px Arial";
+
+  // ticks x
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   xticks.forEach(t => {{
@@ -342,9 +345,10 @@ function drawAxes() {{
     ctx.moveTo(px, py);
     ctx.lineTo(px, py + 6);
     ctx.stroke();
-    ctx.fillText(t.toString().replace(".", ","), px, py + 8);
+    ctx.fillText(String(t).replace(".", ","), px, py + 8);
   }});
 
+  // ticks y
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   yticks.forEach(t => {{
@@ -354,7 +358,7 @@ function drawAxes() {{
     ctx.moveTo(px - 6, py);
     ctx.lineTo(px, py);
     ctx.stroke();
-    ctx.fillText(t.toString().replace(".", ","), px - 10, py);
+    ctx.fillText(String(t).replace(".", ","), px - 10, py);
   }});
 
   ctx.textAlign = "right";
@@ -385,24 +389,25 @@ function drawParticle(x, y, n, qText, qValue) {{
   ctx.fill();
   ctx.stroke();
 
+  // número
   ctx.fillStyle = "#111";
   ctx.font = "bold 16px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(n.toString(), px, py);
+  ctx.fillText(String(n), px, py);
 
-  // label (q e coords)
+  // label (q e coords) - sem template literal
+  const qSub = {{1: "q₁", 2: "q₂", 3: "q₃"}};
   ctx.font = "13px Arial";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  const qSub = {{1: "q₁", 2:"q₂", 3:"q₃"}};
-  const text1 = `${{qSub[n]}} = ${{qText}}`;
-  const text2 = `(${x.toFixed(1).replace(".", ",")}, ${y.toFixed(1).replace(".", ",")}) m`;
+  const text1 = qSub[n] + " = " + qText;
+  const text2 = "(" + x.toFixed(1).replace(".", ",") + ", " + y.toFixed(1).replace(".", ",") + ") m";
   const offx = 20, offy = -26;
   ctx.fillText(text1, px + offx, py + offy);
   ctx.fillText(text2, px + offx, py + offy + 16);
 
-  return {{px, py}};
+  return {{px: px, py: py}};
 }}
 
 function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
@@ -460,7 +465,6 @@ function drawArrow2D(x0, y0, dx, dy, color, label) {{
   ctx.lineTo(x1, y1);
   ctx.stroke();
 
-  // cabeça da seta
   const head = 10;
   const ang = Math.atan2(y1 - y0, x1 - x0);
   ctx.beginPath();
@@ -470,7 +474,7 @@ function drawArrow2D(x0, y0, dx, dy, color, label) {{
   ctx.closePath();
   ctx.fill();
 
-  // label perto da ponta
+  // label
   ctx.font = "14px Arial";
   ctx.textAlign = "left";
   ctx.textBaseline = "bottom";
@@ -481,7 +485,6 @@ function drawArrow2D(x0, y0, dx, dy, color, label) {{
 }}
 
 function drawDashedComponents(x0, y0, dx, dy, color) {{
-  // componentes: primeiro x, depois y (a partir do final de x)
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
@@ -509,16 +512,19 @@ const p1 = drawParticle({x1}, {y1}, 1, "{q1_str}", {q1});
 const p2 = drawParticle({x2}, {y2}, 2, "{q2_str}", {q2});
 const p3 = drawParticle({x3}, {y3}, 3, "{q3_str}", {q3});
 
-// Vetores aplicados na partícula 3
+// vetores aplicados na partícula 3
 const x0 = p3.px;
 const y0 = p3.py;
 
-// Componentes tracejadas + vetores principais
 drawDashedComponents(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728");
 drawArrow2D(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728", "F₁₃");
 
 drawDashedComponents(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4");
 drawArrow2D(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4", "F₂₃");
 
-drawDashedComponents(x0, y0, {dxr:.6f},  {dyr:.6f},  "#2ca02c");
-drawArrow2D(x0, y0, {dxr:.6f}, 
+drawDashedComponents(x0, y0, {dxr:.6f}, {dyr:.6f}, "#2ca02c");
+drawArrow2D(x0, y0, {dxr:.6f}, {dyr:.6f}, "#2ca02c", "Fᵣ");
+</script>
+"""
+components.html(html, height=600)
+
