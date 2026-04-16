@@ -1,16 +1,45 @@
-import streamlit as st
+import streamlit as st13y, F13)
+dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
+dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
+
+DATA = {
+    "xMin": xMin, "xMax": xMax, "yMin": yMin, "yMax": yMax,
+    "xticks": xticks, "yticks": yticks,
+    "p1": {"x": x1, "y": y1, "q": q1, "qText": br_charge_canvas_from_uC(q1_uC)},
+    "p2": {"x": x2, "y": y2, "q": q2, "qText": br_charge_canvas_from_uC(q2_uC)},
+    "p3": {"x": x3, "y": y3, "q": q3, "qText": br_charge_canvas_from_uC(q3_uC)},
+    "vec": {
+        "F13": {"dx": dx13, "dy": dy13},
+        "F23": {"dx": dx23, "dy": dy23},
+        "Fr":  {"dx": dxr,  "dy": dyr},
+    }
+}
+
+# ⚠️ Note: NÃO é f-string. A injeção do DATA é por replace.
+CANVAS_HTML = """
+<div id="canvasWrap" style="width:100%; overflow:auto; -webkit-overflow-scrolling:touch; cursor:grab; user-select:none; touch-action:pan-x pan-y;">
+  <canvas id="canvas" width="1050" height="560" style="background:white; border:1px solid #eee; display:block;"></canvas>
+</div>
+
+<script>
+const DATA = __DATA__;
+
+const wrap = document.getElementById("canvasWrap");
+let isDown=false, startX=0, startY=0, startScrollLeft=0, startScrollTop=0, activePointerId=null;
+
+wrap.addEventListener("pointerdown",(e)=>{
+  if(e.pointerType==="mouse" && e.button!==0) return;
+  isDown=true; activePointerId=e.pointerId; wrap.setPointerCapture(activePointerId);
+  startX=e.clientX; start
 import streamlit.components.v1 as components
 import math
 import json
-from string import Template
 
 st.set_page_config(page_title="Simulador Força Eletrostática (2D)", layout="wide")
-
 
 # ===================== Helpers =====================
 
 def sig(x, n=2):
-    """Retorna x com n algarismos significativos (float)."""
     if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
         return 0.0
     return float(f"{x:.{n}g}")
@@ -74,15 +103,9 @@ def latex_r_2d_from_positions(xa, ya, xb, yb):
     rs  = br_decimal(f"{r:.2f}")
     return dxs, dys, rs
 
-
 # ===================== Física 2D =====================
 
 def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
-    """
-    Força em i (vetor 2D) devido a j:
-      F = K*qi*qj * r_vec / |r|^3, onde r_vec=(xi-xj, yi-yj)
-    Retorna (Fx, Fy, r)
-    """
     rx = xi - xj
     ry = yi - yj
     r = math.sqrt(rx*rx + ry*ry)
@@ -92,7 +115,6 @@ def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
     Fx = coef * rx
     Fy = coef * ry
     return Fx, Fy, r
-
 
 # ===================== Cabeçalho =====================
 
@@ -109,7 +131,6 @@ with col_title:
         "próxima a outras duas partículas carregadas **1** e **2**."
     )
     st.markdown("**Desafio: encontre uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fᵣ ~ 0).**")
-
 
 # ===================== Controles =====================
 
@@ -148,7 +169,6 @@ if len(pts) < 3:
     st.error("❌ As partículas **não podem** estar na mesma posição (mesmo ponto (x,y)). Ajuste as posições.")
     st.stop()
 
-
 # ===================== Cálculos =====================
 
 K = 9.0e9
@@ -156,17 +176,17 @@ K = 9.0e9
 F13x_raw, F13y_raw, r13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1, K=K)
 F23x_raw, F23y_raw, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
 
-# componentes com 2 AS (como você fazia no 1D)
+# Componentes exibidas com 2 AS
 F13x = sig(F13x_raw, 2)
 F13y = sig(F13y_raw, 2)
 F23x = sig(F23x_raw, 2)
 F23y = sig(F23y_raw, 2)
 
-# resultante didática: soma usando já arredondado (2 AS)
+# Resultante didática (soma usando componentes já exibidas)
 Frx = sig(F13x + F23x, 2)
 Fry = sig(F13y + F23y, 2)
 
-# módulos e ângulos a partir do exibido
+# Módulos e ângulos
 F13 = sig(safe_hypot(F13x, F13y), 2)
 F23 = sig(safe_hypot(F23x, F23y), 2)
 Fr  = sig(safe_hypot(Frx,  Fry),  2)
@@ -177,7 +197,6 @@ thetar  = math.degrees(math.atan2(Fry,  Frx))  if not (Frx  == 0 and Fry  == 0) 
 
 equilibrio = (Frx == 0.0 and Fry == 0.0)
 
-
 # ===================== Figura 2D (Canvas) =====================
 
 st.header("Figura – Sistema Bidimensional (x,y)")
@@ -187,7 +206,6 @@ yMin, yMax = -12.0, 12.0
 xticks = list(range(-15, 16, 3))
 yticks = list(range(-12, 13, 3))
 
-# escala vetorial (pixels)
 maxVec = max(F13, F23, Fr, 1e-30)
 Lmax = 150.0
 
@@ -198,100 +216,5 @@ def force_to_pixel_dxdy(Fx, Fy, Fmag):
     if Fmag == 0:
         return 0.0, 0.0
     s = vec_scale(Fmag) / Fmag
-    return Fx * s, -Fy * s  # canvas: y cresce para baixo
+    return Fx * s, -Fy * s  # y invertido no canvas
 
-dx13, dy13 = force_to_pixel_dxdy(F13x, F13y, F13)
-dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
-dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
-
-q1_str = br_charge_canvas_from_uC(q1_uC)
-q2_str = br_charge_canvas_from_uC(q2_uC)
-q3_str = br_charge_canvas_from_uC(q3_uC)
-
-DATA = {
-    "xMin": xMin, "xMax": xMax, "yMin": yMin, "yMax": yMax,
-    "xticks": xticks, "yticks": yticks,
-    "p1": {"x": x1, "y": y1, "q": q1, "qText": q1_str},
-    "p2": {"x": x2, "y": y2, "q": q2, "qText": q2_str},
-    "p3": {"x": x3, "y": y3, "q": q3, "qText": q3_str},
-    "vec": {
-        "F13": {"dx": dx13, "dy": dy13},
-        "F23": {"dx": dx23, "dy": dy23},
-        "Fr":  {"dx": dxr,  "dy": dyr},
-    }
-}
-
-# HTML/JS SEM triple quotes: montado com join
-canvas_html = "\n".join([
-    '<div id="canvasWrap" style="width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; cursor: grab; user-select: none; touch-action: pan-x pan-y;">',
-    '  <canvas id="canvas" width="1050" height="560" style="background: white; border: 1px solid #eee; display: block;"></canvas>',
-    '</div>',
-    '',
-    '<script>',
-    'const DATA = $DATA_JSON;',
-    '',
-    'const wrap = document.getElementById("canvasWrap");',
-    'let isDown = false;',
-    'let startX = 0, startY = 0;',
-    'let startScrollLeft = 0, startScrollTop = 0;',
-    'let activePointerId = null;',
-    '',
-    'wrap.addEventListener("pointerdown", (e) => {',
-    '  if (e.pointerType === "mouse" && e.button !== 0) return;',
-    '  isDown = true;',
-    '  activePointerId = e.pointerId;',
-    '  wrap.setPointerCapture(activePointerId);',
-    '  startX = e.clientX;',
-    '  startY = e.clientY;',
-    '  startScrollLeft = wrap.scrollLeft;',
-    '  startScrollTop = wrap.scrollTop;',
-    '  wrap.style.cursor = "grabbing";',
-    '});',
-    '',
-    'wrap.addEventListener("pointermove", (e) => {',
-    '  if (!isDown) return;',
-    '  if (activePointerId !== e.pointerId) return;',
-    '  const dx = e.clientX - startX;',
-    '  const dy = e.clientY - startY;',
-    '  wrap.scrollLeft = startScrollLeft - dx;',
-    '  wrap.scrollTop  = startScrollTop  - dy;',
-    '});',
-    '',
-    'function endDrag(e) {',
-    '  if (activePointerId !== null && e.pointerId !== activePointerId) return;',
-    '  isDown = false;',
-    '  activePointerId = null;',
-    '  wrap.style.cursor = "grab";',
-    '}',
-    'wrap.addEventListener("pointerup", endDrag);',
-    'wrap.addEventListener("pointercancel", endDrag);',
-    '',
-    'const canvas = document.getElementById("canvas");',
-    'const ctx = canvas.getContext("2d");',
-    'const W = canvas.width;',
-    'const H = canvas.height;',
-    'ctx.clearRect(0, 0, W, H);',
-    'ctx.fillStyle = "white";',
-    'ctx.fillRect(0, 0, W, H);',
-    '',
-    'const xMin = DATA.xMin, xMax = DATA.xMax, yMin = DATA.yMin, yMax = DATA.yMax;',
-    'const xticks = DATA.xticks, yticks = DATA.yticks;',
-    '',
-    'const padL = 70, padR = 30, padT = 30, padB = 70;',
-    '',
-    'function X(x) { return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin)); }',
-    'function Y(y) { return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin)); }',
-    '',
-    'function drawAxes() {',
-    '  ctx.strokeStyle = "#f0f0f0";',
-    '  ctx.lineWidth = 1;',
-    '  xticks.forEach(t => {',
-    '    const px = X(t);',
-    '    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, H - padB); ctx.stroke();',
-    '  });',
-    '  yticks.forEach(t => {',
-    '    const py = Y(t);',
-    '    ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(W - padR, py); ctx.stroke();',
-    '  });',
-    '',
-    '  ctx.strokeStyle = "#111"; ctx.lineWidth = 2;',
