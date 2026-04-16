@@ -1,12 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import math
-import matplotlib.pyplot as plt
-from matplotlib.patches import Arc
 
 st.set_page_config(page_title="Simulador Força Eletrostática (2D)", layout="wide")
 
-# ===================== Helpers (mantidos e ampliados) =====================
+# ===================== Helpers =====================
 
 def sig(x, n=2):
     """Retorna x com n algarismos significativos (float)."""
@@ -47,10 +45,7 @@ def fmt_uC_br(q_uC: float) -> str:
     return f"{round(q_uC, 2):.2f}".replace(".", ",")
 
 def latex_charge_C_from_uC(q_uC: float) -> str:
-    """
-    Retorna LaTeX da carga em Coulomb, exibindo exatamente o valor do slider em µC (2 casas),
-    convertido para (mantissa × 10^{-6}) C.
-    """
+    """LaTeX da carga (µC -> C como mantissa×10^{-6})."""
     if math.isclose(q_uC, 0.0, abs_tol=0.0):
         return r"0"
     mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
@@ -61,33 +56,42 @@ def fmt_pos_br(x: float) -> str:
     return f"{round(x, 1):.1f}".replace(".", ",")
 
 def br_charge_canvas_from_uC(q_uC: float) -> str:
-    """Texto para canvas: mostra q com 2 casas do slider em µC convertido para C em notação 10^-6."""
+    """Texto para canvas: q em µC exibido como C em 10^-6."""
     if math.isclose(q_uC, 0.0, abs_tol=0.0):
         return "0 C"
     mant_s = fmt_uC_br(q_uC)
     exp = -6
     return f"{mant_s}×10{str(exp).translate(_sup_map)} C"
 
-def br_angle_deg(theta_deg: float) -> str:
-    """Formata ângulo em graus com vírgula."""
-    return br_decimal(f"{theta_deg:.1f}")
-
 def safe_hypot(x, y):
     return math.sqrt(x*x + y*y)
+
+def br_angle_deg(theta_deg: float) -> str:
+    """Formata ângulo em graus com 1 casa e vírgula."""
+    return br_decimal(f"{theta_deg:.1f}")
+
+def latex_r_2d_from_positions(xa, ya, xb, yb):
+    """Mostra r com base na resolução do slider (0,1 m)."""
+    dx = round(xa, 1) - round(xb, 1)
+    dy = round(ya, 1) - round(yb, 1)
+    r = math.sqrt(dx*dx + dy*dy)
+    dxs = br_decimal(f"{dx:.1f}").replace("-", "{-}")
+    dys = br_decimal(f"{dy:.1f}").replace("-", "{-}")
+    rs  = br_decimal(f"{r:.2f}")
+    return dxs, dys, rs
 
 # ===================== Física 2D =====================
 
 def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
     """
     Força em i (vetor 2D) devido a j:
-      F = k*qi*qj * (r_vec) / |r|^3, onde r_vec = (xi-xj, yi-yj)
-    Retorna: (Fx, Fy, r)
+      F = K*qi*qj * r_vec / |r|^3, onde r_vec=(xi-xj, yi-yj)
+    Retorna (Fx, Fy, r)
     """
     rx = xi - xj
     ry = yi - yj
     r = math.sqrt(rx*rx + ry*ry)
     if math.isclose(r, 0.0, abs_tol=0.0):
-        # evita divisão por zero
         return 0.0, 0.0, 0.0
     coef = K * qi * qj / (r**3)
     Fx = coef * rx
@@ -116,7 +120,10 @@ st.header("Definições das Partículas (2D)")
 
 col1, col2, col3 = st.columns(3)
 
+# Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
+
+# Sliders de posição
 xmin_slider, xmax_slider = -10.0, 10.0
 ymin_slider, ymax_slider = -10.0, 10.0
 
@@ -129,16 +136,16 @@ with col1:
 
 with col2:
     st.subheader("Partícula 2")
-    x2 = st.slider("Posição x₂ (m)", xmin_slider, xmax_slider, 4.0, 0.1, format="%.1f")
+    x2 = st.slider("Posição x₂ (m)", xmin_slider, xmax_slider,  4.0, 0.1, format="%.1f")
     y2 = st.slider("Posição y₂ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
     q2_uC = st.slider("Carga q₂ (µC)", qmin_uC, qmax_uC, -2.0, qstep_uC, format="%.2f")
     q2 = q2_uC * 1e-6
 
 with col3:
     st.subheader("Partícula 3")
-    x3 = st.slider("Posição x₃ (m)", xmin_slider, xmax_slider, 0.0, 0.1, format="%.1f")
+    x3 = st.slider("Posição x₃ (m)", xmin_slider, xmax_slider,  0.0, 0.1, format="%.1f")
     y3 = st.slider("Posição y₃ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
-    q3_uC = st.slider("Carga q₃ (µC)", qmin_uC, qmax_uC, 1.0, qstep_uC, format="%.2f")
+    q3_uC = st.slider("Carga q₃ (µC)", qmin_uC, qmax_uC,  1.0, qstep_uC, format="%.2f")
     q3 = q3_uC * 1e-6
 
 # Bloqueio de posições iguais (mesmo ponto no plano)
@@ -151,7 +158,7 @@ if len(pts) < 3:
 
 K = 9.0e9
 
-# Forças "reais" (componentes)
+# Forças (componentes "reais")
 F13x_raw, F13y_raw, r13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1, K=K)
 F23x_raw, F23y_raw, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
 
@@ -161,11 +168,11 @@ F13y = sig(F13y_raw, 2)
 F23x = sig(F23x_raw, 2)
 F23y = sig(F23y_raw, 2)
 
-# Resultante: soma DIDÁTICA usando componentes já exibidas (2 AS)
+# Resultante DIDÁTICA: soma usando componentes exibidas (2 AS)
 Frx = sig(F13x + F23x, 2)
 Fry = sig(F13y + F23y, 2)
 
-# Magnitudes e ângulos (a partir do exibido)
+# Módulos e ângulos a partir do exibido
 F13 = sig(safe_hypot(F13x, F13y), 2)
 F23 = sig(safe_hypot(F23x, F23y), 2)
 Fr  = sig(safe_hypot(Frx,  Fry),  2)
@@ -188,29 +195,27 @@ yticks = list(range(-12, 13, 3))
 
 # escala dos vetores (pixels)
 maxVec = max(F13, F23, Fr, 1e-30)
-# comprimento máximo (pixels) para o maior vetor
 Lmax = 150.0
 
 def vec_scale(Fmag):
     return Lmax * (abs(Fmag) / maxVec)
 
-# converte força (N) em deslocamento pixel proporcional (usa componentes)
-# fator comum: escala pela magnitude exibida e normaliza pelo próprio vetor
 def force_to_pixel_dxdy(Fx, Fy, Fmag):
+    """Converte força (N) para dx,dy (px), mantendo direção e escala proporcional."""
     if Fmag == 0:
         return 0.0, 0.0
     s = vec_scale(Fmag) / Fmag
-    return Fx * s, -Fy * s  # Canvas: y cresce para baixo
-
-q1_str = br_charge_canvas_from_uC(q1_uC)
-q2_str = br_charge_canvas_from_uC(q2_uC)
-q3_str = br_charge_canvas_from_uC(q3_uC)
+    return Fx * s, -Fy * s  # y invertido no canvas
 
 dx13, dy13 = force_to_pixel_dxdy(F13x, F13y, F13)
 dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
 dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
 
+q1_str = br_charge_canvas_from_uC(q1_uC)
+q2_str = br_charge_canvas_from_uC(q2_uC)
+q3_str = br_charge_canvas_from_uC(q3_uC)
 
+# ⚠️ Importante: como isto é f-string, todo { } do JS precisa virar {{ }}
 html = f"""
 <div id="canvasWrap" style="
     width: 100%;
@@ -289,8 +294,8 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
-// ---------- grade e eixos ----------
 function drawAxes() {{
+  // grade
   ctx.strokeStyle = "#f0f0f0";
   ctx.lineWidth = 1;
 
@@ -331,7 +336,7 @@ function drawAxes() {{
     ctx.stroke();
   }}
 
-  // ticks e rótulos
+  // ticks + rótulos
   ctx.fillStyle = "#111";
   ctx.font = "13px Arial";
 
@@ -396,7 +401,7 @@ function drawParticle(x, y, n, qText, qValue) {{
   ctx.textBaseline = "middle";
   ctx.fillText(String(n), px, py);
 
-  // label (q e coords) - sem template literal
+  // label (q e coords) - sem template literals
   const qSub = {{1: "q₁", 2: "q₂", 3: "q₃"}};
   ctx.font = "13px Arial";
   ctx.textAlign = "left";
@@ -455,76 +460,9 @@ function drawArrow2D(x0, y0, dx, dy, color, label) {{
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(label + " ≈ 0", x0 + 12, y0);
-
     drawVectorOverLabel(label, x0 + 12, y0, "left", color);
     return;
   }}
 
   ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-
-  const head = 10;
-  const ang = Math.atan2(y1 - y0, x1 - x0);
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x1 - head*Math.cos(ang - Math.PI/7), y1 - head*Math.sin(ang - Math.PI/7));
-  ctx.lineTo(x1 - head*Math.cos(ang + Math.PI/7), y1 - head*Math.sin(ang + Math.PI/7));
-  ctx.closePath();
-  ctx.fill();
-
-  // label
-  ctx.font = "14px Arial";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "bottom";
-  const tx = x1 + 6;
-  const ty = y1 - 6;
-  ctx.fillText(label, tx, ty);
-  drawVectorOverLabel(label, tx, ty, "left", color);
-}}
-
-function drawDashedComponents(x0, y0, dx, dy, color) {{
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 5]);
-
-  // componente x
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x0 + dx, y0);
-  ctx.stroke();
-
-  // componente y
-  ctx.beginPath();
-  ctx.moveTo(x0 + dx, y0);
-  ctx.lineTo(x0 + dx, y0 + dy);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.restore();
-}}
-
-drawAxes();
-
-const p1 = drawParticle({x1}, {y1}, 1, "{q1_str}", {q1});
-const p2 = drawParticle({x2}, {y2}, 2, "{q2_str}", {q2});
-const p3 = drawParticle({x3}, {y3}, 3, "{q3_str}", {q3});
-
-// vetores aplicados na partícula 3
-const x0 = p3.px;
-const y0 = p3.py;
-
-drawDashedComponents(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728");
-drawArrow2D(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728", "F₁₃");
-
-drawDashedComponents(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4");
-drawArrow2D(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4", "F₂₃");
-
-drawDashedComponents(x0, y0, {dxr:.6f}, {dyr:.6f}, "#2ca02c");
-drawArrow2D(x0, y0, {dxr:.6f}, {dyr:.6f}, "#2ca02c", "Fᵣ");
-</script>
-"""
-components.html(html, height=600)
-
+  ctx.moveTo(x
