@@ -1,0 +1,524 @@
+import streamlit as st
+import streamlit.components.v1 as components
+import math
+import matplotlib.pyplot as plt
+from matplotlib.patches import Arc
+
+st.set_page_config(page_title="Simulador Força Eletrostática (2D)", layout="wide")
+
+# ===================== Helpers (mantidos e ampliados) =====================
+
+def sig(x, n=2):
+    """Retorna x com n algarismos significativos (float)."""
+    if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
+        return 0.0
+    return float(f"{x:.{n}g}")
+
+def br_decimal(s: str) -> str:
+    """Troca ponto por vírgula em uma string numérica."""
+    return s.replace(".", ",")
+
+_sup_map = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
+
+def sci_parts(x, n=2):
+    """Retorna (mantissa, expoente) com n algarismos significativos na mantissa."""
+    if x == 0:
+        return 0.0, 0
+    exp = int(math.floor(math.log10(abs(x))))
+    mant = x / (10 ** exp)
+    mant = float(f"{mant:.{n}g}")
+    if abs(mant) >= 10:
+        mant /= 10
+        exp += 1
+    return mant, exp
+
+def br_sci_force_text(x, n=2, unit="N"):
+    """Valor em notação científica com vírgula e n algarismos significativos."""
+    if x == 0:
+        out = "0"
+    else:
+        mant, exp = sci_parts(x, n=n)
+        mant_s = br_decimal(f"{mant:.{n}g}")
+        out = f"{mant_s}×10{str(exp).translate(_sup_map)}"
+    return f"{out} {unit}".strip()
+
+def fmt_uC_br(q_uC: float) -> str:
+    """Retorna a carga do slider em µC com 2 casas e vírgula."""
+    return f"{round(q_uC, 2):.2f}".replace(".", ",")
+
+def latex_charge_C_from_uC(q_uC: float) -> str:
+    """
+    Retorna LaTeX da carga em Coulomb, exibindo exatamente o valor do slider em µC (2 casas),
+    convertido para (mantissa × 10^{-6}) C.
+    """
+    if math.isclose(q_uC, 0.0, abs_tol=0.0):
+        return r"0"
+    mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
+    return rf"{mant}\times10^{{-6}}"
+
+def fmt_pos_br(x: float) -> str:
+    """Retorna posição do slider com 1 casa e vírgula."""
+    return f"{round(x, 1):.1f}".replace(".", ",")
+
+def br_charge_canvas_from_uC(q_uC: float) -> str:
+    """Texto para canvas: mostra q com 2 casas do slider em µC convertido para C em notação 10^-6."""
+    if math.isclose(q_uC, 0.0, abs_tol=0.0):
+        return "0 C"
+    mant_s = fmt_uC_br(q_uC)
+    exp = -6
+    return f"{mant_s}×10{str(exp).translate(_sup_map)} C"
+
+def br_angle_deg(theta_deg: float) -> str:
+    """Formata ângulo em graus com vírgula."""
+    return br_decimal(f"{theta_deg:.1f}")
+
+def safe_hypot(x, y):
+    return math.sqrt(x*x + y*y)
+
+# ===================== Física 2D =====================
+
+def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
+    """
+    Força em i (vetor 2D) devido a j:
+      F = k*qi*qj * (r_vec) / |r|^3, onde r_vec = (xi-xj, yi-yj)
+    Retorna: (Fx, Fy, r)
+    """
+    rx = xi - xj
+    ry = yi - yj
+    r = math.sqrt(rx*rx + ry*ry)
+    if math.isclose(r, 0.0, abs_tol=0.0):
+        # evita divisão por zero
+        return 0.0, 0.0, 0.0
+    coef = K * qi * qj / (r**3)
+    Fx = coef * rx
+    Fy = coef * ry
+    return Fx, Fy, r
+
+# ===================== Cabeçalho =====================
+
+col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
+with col_logo:
+    try:
+        st.image("logo_maua.png", use_container_width=True)
+    except Exception:
+        st.warning("Arquivo 'logo_maua.png' não encontrado na raiz do repositório.")
+with col_title:
+    st.title("Simulador Força Eletrostática Bidimensional (x,y)")
+    st.write(
+        "Veja as forças aplicadas na partícula carregada **3** quando posicionada no plano "
+        "próxima a outras duas partículas carregadas **1** e **2**."
+    )
+    st.markdown("**Desafio: encontre uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fᵣ ~ 0).**")
+
+# ===================== Controles =====================
+
+st.header("Definições das Partículas (2D)")
+
+col1, col2, col3 = st.columns(3)
+
+qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
+xmin_slider, xmax_slider = -10.0, 10.0
+ymin_slider, ymax_slider = -10.0, 10.0
+
+with col1:
+    st.subheader("Partícula 1")
+    x1 = st.slider("Posição x₁ (m)", xmin_slider, xmax_slider, -4.0, 0.1, format="%.1f")
+    y1 = st.slider("Posição y₁ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
+    q1_uC = st.slider("Carga q₁ (µC)", qmin_uC, qmax_uC, 2.0, qstep_uC, format="%.2f")
+    q1 = q1_uC * 1e-6
+
+with col2:
+    st.subheader("Partícula 2")
+    x2 = st.slider("Posição x₂ (m)", xmin_slider, xmax_slider, 4.0, 0.1, format="%.1f")
+    y2 = st.slider("Posição y₂ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
+    q2_uC = st.slider("Carga q₂ (µC)", qmin_uC, qmax_uC, -2.0, qstep_uC, format="%.2f")
+    q2 = q2_uC * 1e-6
+
+with col3:
+    st.subheader("Partícula 3")
+    x3 = st.slider("Posição x₃ (m)", xmin_slider, xmax_slider, 0.0, 0.1, format="%.1f")
+    y3 = st.slider("Posição y₃ (m)", ymin_slider, ymax_slider,  0.0, 0.1, format="%.1f")
+    q3_uC = st.slider("Carga q₃ (µC)", qmin_uC, qmax_uC, 1.0, qstep_uC, format="%.2f")
+    q3 = q3_uC * 1e-6
+
+# Bloqueio de posições iguais (mesmo ponto no plano)
+pts = {(x1, y1), (x2, y2), (x3, y3)}
+if len(pts) < 3:
+    st.error("❌ As partículas **não podem** estar na mesma posição (mesmo ponto (x,y)). Ajuste as posições.")
+    st.stop()
+
+# ===================== Cálculos =====================
+
+K = 9.0e9
+
+# Forças "reais" (componentes)
+F13x_raw, F13y_raw, r13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1, K=K)
+F23x_raw, F23y_raw, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
+
+# Componentes exibidas com 2 AS
+F13x = sig(F13x_raw, 2)
+F13y = sig(F13y_raw, 2)
+F23x = sig(F23x_raw, 2)
+F23y = sig(F23y_raw, 2)
+
+# Resultante: soma DIDÁTICA usando componentes já exibidas (2 AS)
+Frx = sig(F13x + F23x, 2)
+Fry = sig(F13y + F23y, 2)
+
+# Magnitudes e ângulos (a partir do exibido)
+F13 = sig(safe_hypot(F13x, F13y), 2)
+F23 = sig(safe_hypot(F23x, F23y), 2)
+Fr  = sig(safe_hypot(Frx,  Fry),  2)
+
+theta13 = math.degrees(math.atan2(F13y, F13x)) if not (F13x == 0 and F13y == 0) else 0.0
+theta23 = math.degrees(math.atan2(F23y, F23x)) if not (F23x == 0 and F23y == 0) else 0.0
+thetar  = math.degrees(math.atan2(Fry,  Frx))  if not (Frx  == 0 and Fry  == 0) else 0.0
+
+equilibrio = (Frx == 0.0 and Fry == 0.0)
+
+# ===================== Figura 2D (Canvas) =====================
+
+st.header("Figura – Sistema Bidimensional (x,y)")
+
+# limites do plano mostrado
+xMin, xMax = -15.0, 15.0
+yMin, yMax = -12.0, 12.0
+xticks = list(range(-15, 16, 3))
+yticks = list(range(-12, 13, 3))
+
+# escala dos vetores (pixels)
+maxVec = max(F13, F23, Fr, 1e-30)
+# comprimento máximo (pixels) para o maior vetor
+Lmax = 150.0
+
+def vec_scale(Fmag):
+    return Lmax * (abs(Fmag) / maxVec)
+
+# converte força (N) em deslocamento pixel proporcional (usa componentes)
+# fator comum: escala pela magnitude exibida e normaliza pelo próprio vetor
+def force_to_pixel_dxdy(Fx, Fy, Fmag):
+    if Fmag == 0:
+        return 0.0, 0.0
+    s = vec_scale(Fmag) / Fmag
+    return Fx * s, -Fy * s  # Canvas: y cresce para baixo
+
+q1_str = br_charge_canvas_from_uC(q1_uC)
+q2_str = br_charge_canvas_from_uC(q2_uC)
+q3_str = br_charge_canvas_from_uC(q3_uC)
+
+dx13, dy13 = force_to_pixel_dxdy(F13x, F13y, F13)
+dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
+dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
+
+html = f"""
+<div id="canvasWrap" style="
+    width: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-x pan-y;
+">
+  <canvas id="canvas" width="1050" height="560"
+    style="background: white; border: 1px solid #eee; display: block;">
+  </canvas>
+</div>
+
+<script>
+const wrap = document.getElementById("canvasWrap");
+let isDown = false;
+let startX = 0, startY = 0;
+let startScrollLeft = 0, startScrollTop = 0;
+let activePointerId = null;
+
+wrap.addEventListener("pointerdown", (e) => {{
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  isDown = true;
+  activePointerId = e.pointerId;
+  wrap.setPointerCapture(activePointerId);
+  startX = e.clientX;
+  startY = e.clientY;
+  startScrollLeft = wrap.scrollLeft;
+  startScrollTop = wrap.scrollTop;
+  wrap.style.cursor = "grabbing";
+}});
+
+wrap.addEventListener("pointermove", (e) => {{
+  if (!isDown) return;
+  if (activePointerId !== e.pointerId) return;
+  const dx = e.clientX - startX;
+  const dy = e.clientY - startY;
+  wrap.scrollLeft = startScrollLeft - dx;
+  wrap.scrollTop  = startScrollTop  - dy;
+}});
+
+function endDrag(e) {{
+  if (activePointerId !== null && e.pointerId !== activePointerId) return;
+  isDown = false;
+  activePointerId = null;
+  wrap.style.cursor = "grab";
+}}
+wrap.addEventListener("pointerup", endDrag);
+wrap.addEventListener("pointercancel", endDrag);
+
+// ===================== desenho =====================
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const W = canvas.width;
+const H = canvas.height;
+
+ctx.clearRect(0, 0, W, H);
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, W, H);
+
+const xMin = {xMin};
+const xMax = {xMax};
+const yMin = {yMin};
+const yMax = {yMax};
+
+const padL = 70;
+const padR = 30;
+const padT = 30;
+const padB = 70;
+
+function X(x) {{
+  return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
+}}
+function Y(y) {{
+  return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
+}}
+
+// ---------- grade e eixos ----------
+function drawAxes() {{
+  // grade
+  ctx.strokeStyle = "#f0f0f0";
+  ctx.lineWidth = 1;
+  const xticks = {xticks};
+  const yticks = {yticks};
+
+  xticks.forEach(t => {{
+    const px = X(t);
+    ctx.beginPath();
+    ctx.moveTo(px, padT);
+    ctx.lineTo(px, H - padB);
+    ctx.stroke();
+  }});
+  yticks.forEach(t => {{
+    const py = Y(t);
+    ctx.beginPath();
+    ctx.moveTo(padL, py);
+    ctx.lineTo(W - padR, py);
+    ctx.stroke();
+  }});
+
+  // eixos principais (x=0 e y=0 se estiverem no range)
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 2;
+
+  if (0 >= xMin && 0 <= xMax) {{
+    const px0 = X(0);
+    ctx.beginPath();
+    ctx.moveTo(px0, padT);
+    ctx.lineTo(px0, H - padB);
+    ctx.stroke();
+  }}
+  if (0 >= yMin && 0 <= yMax) {{
+    const py0 = Y(0);
+    ctx.beginPath();
+    ctx.moveTo(padL, py0);
+    ctx.lineTo(W - padR, py0);
+    ctx.stroke();
+  }}
+
+  // ticks e rótulos
+  ctx.fillStyle = "#111";
+  ctx.font = "13px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  xticks.forEach(t => {{
+    const px = X(t);
+    const py = H - padB;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py + 6);
+    ctx.stroke();
+    ctx.fillText(t.toString().replace(".", ","), px, py + 8);
+  }});
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  yticks.forEach(t => {{
+    const py = Y(t);
+    const px = padL;
+    ctx.beginPath();
+    ctx.moveTo(px - 6, py);
+    ctx.lineTo(px, py);
+    ctx.stroke();
+    ctx.fillText(t.toString().replace(".", ","), px - 10, py);
+  }});
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("x (m)", W - padR, H - 8);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("y (m)", 10, 8);
+}}
+
+function borderColorByCharge(q) {{
+  const eps = 1e-15;
+  if (q > eps) return "#d62728";
+  if (q < -eps) return "#1f77b4";
+  return "#111";
+}}
+
+function drawParticle(x, y, n, qText, qValue) {{
+  const px = X(x);
+  const py = Y(y);
+
+  ctx.fillStyle = "#f7f7f7";
+  ctx.strokeStyle = borderColorByCharge(qValue);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(px, py, 16, 0, 2*Math.PI);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#111";
+  ctx.font = "bold 16px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(n.toString(), px, py);
+
+  // label (q e coords)
+  ctx.font = "13px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  const qSub = {{1: "q₁", 2:"q₂", 3:"q₃"}};
+  const text1 = `${{qSub[n]}} = ${{qText}}`;
+  const text2 = `(${x.toFixed(1).replace(".", ",")}, ${y.toFixed(1).replace(".", ",")}) m`;
+  const offx = 20, offy = -26;
+  ctx.fillText(text1, px + offx, py + offy);
+  ctx.fillText(text2, px + offx, py + offy + 16);
+
+  return {{px, py}};
+}}
+
+function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
+  ctx.save();
+  ctx.font = "14px Arial";
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+
+  const w = ctx.measureText(text).width;
+  let xLeft = xAnchor;
+  if (align === "right") xLeft = xAnchor - w;
+  if (align === "center") xLeft = xAnchor - w/2;
+
+  const yArrow = yBaseline - 16;
+  ctx.beginPath();
+  ctx.moveTo(xLeft, yArrow);
+  ctx.lineTo(xLeft + w, yArrow);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(xLeft + w, yArrow);
+  ctx.lineTo(xLeft + w - 6, yArrow - 4);
+  ctx.lineTo(xLeft + w - 6, yArrow + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}}
+
+function drawArrow2D(x0, y0, dx, dy, color, label) {{
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
+
+  const x1 = x0 + dx;
+  const y1 = y0 + dy;
+
+  if (dx === 0 && dy === 0) {{
+    ctx.beginPath();
+    ctx.arc(x0, y0, 6, 0, 2*Math.PI);
+    ctx.stroke();
+
+    ctx.font = "14px Arial";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label + " ≈ 0", x0 + 12, y0);
+
+    drawVectorOverLabel(label, x0 + 12, y0, "left", color);
+    return;
+  }}
+
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+
+  // cabeça da seta
+  const head = 10;
+  const ang = Math.atan2(y1 - y0, x1 - x0);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - head*Math.cos(ang - Math.PI/7), y1 - head*Math.sin(ang - Math.PI/7));
+  ctx.lineTo(x1 - head*Math.cos(ang + Math.PI/7), y1 - head*Math.sin(ang + Math.PI/7));
+  ctx.closePath();
+  ctx.fill();
+
+  // label perto da ponta
+  ctx.font = "14px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  const tx = x1 + 6;
+  const ty = y1 - 6;
+  ctx.fillText(label, tx, ty);
+  drawVectorOverLabel(label, tx, ty, "left", color);
+}}
+
+function drawDashedComponents(x0, y0, dx, dy, color) {{
+  // componentes: primeiro x, depois y (a partir do final de x)
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 5]);
+
+  // componente x
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x0 + dx, y0);
+  ctx.stroke();
+
+  // componente y
+  ctx.beginPath();
+  ctx.moveTo(x0 + dx, y0);
+  ctx.lineTo(x0 + dx, y0 + dy);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.restore();
+}}
+
+drawAxes();
+
+const p1 = drawParticle({x1}, {y1}, 1, "{q1_str}", {q1});
+const p2 = drawParticle({x2}, {y2}, 2, "{q2_str}", {q2});
+const p3 = drawParticle({x3}, {y3}, 3, "{q3_str}", {q3});
+
+// Vetores aplicados na partícula 3
+const x0 = p3.px;
+const y0 = p3.py;
+
+// Componentes tracejadas + vetores principais
+drawDashedComponents(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728");
+drawArrow2D(x0, y0, {dx13:.6f}, {dy13:.6f}, "#d62728", "F₁₃");
+
+drawDashedComponents(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4");
+drawArrow2D(x0, y0, {dx23:.6f}, {dy23:.6f}, "#1f77b4", "F₂₃");
+
+drawDashedComponents(x0, y0, {dxr:.6f},  {dyr:.6f},  "#2ca02c");
+drawArrow2D(x0, y0, {dxr:.6f}, 
