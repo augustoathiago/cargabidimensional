@@ -1,6 +1,8 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import math
+import json
+from string import Template
 
 st.set_page_config(page_title="Simulador Força Eletrostática (2D)", layout="wide")
 
@@ -120,10 +122,7 @@ st.header("Definições das Partículas (2D)")
 
 col1, col2, col3 = st.columns(3)
 
-# Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
-
-# Sliders de posição
 xmin_slider, xmax_slider = -10.0, 10.0
 ymin_slider, ymax_slider = -10.0, 10.0
 
@@ -158,7 +157,6 @@ if len(pts) < 3:
 
 K = 9.0e9
 
-# Forças (componentes "reais")
 F13x_raw, F13y_raw, r13 = coulomb_force_2d(q3, q1, x3, y3, x1, y1, K=K)
 F23x_raw, F23y_raw, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
 
@@ -201,7 +199,6 @@ def vec_scale(Fmag):
     return Lmax * (abs(Fmag) / maxVec)
 
 def force_to_pixel_dxdy(Fx, Fy, Fmag):
-    """Converte força (N) para dx,dy (px), mantendo direção e escala proporcional."""
     if Fmag == 0:
         return 0.0, 0.0
     s = vec_scale(Fmag) / Fmag
@@ -211,12 +208,26 @@ dx13, dy13 = force_to_pixel_dxdy(F13x, F13y, F13)
 dx23, dy23 = force_to_pixel_dxdy(F23x, F23y, F23)
 dxr,  dyr  = force_to_pixel_dxdy(Frx,  Fry,  Fr)
 
+# Strings para rótulos das cargas
 q1_str = br_charge_canvas_from_uC(q1_uC)
 q2_str = br_charge_canvas_from_uC(q2_uC)
 q3_str = br_charge_canvas_from_uC(q3_uC)
 
-# ⚠️ Importante: como isto é f-string, todo { } do JS precisa virar {{ }}
-html = f"""
+# Dados enviados ao JS via JSON (sem f-string com chaves do JS!)
+DATA = {
+    "xMin": xMin, "xMax": xMax, "yMin": yMin, "yMax": yMax,
+    "xticks": xticks, "yticks": yticks,
+    "p1": {"x": x1, "y": y1, "q": q1, "qText": q1_str},
+    "p2": {"x": x2, "y": y2, "q": q2, "qText": q2_str},
+    "p3": {"x": x3, "y": y3, "q": q3, "qText": q3_str},
+    "vec": {
+        "F13": {"dx": dx13, "dy": dy13},
+        "F23": {"dx": dx23, "dy": dy23},
+        "Fr":  {"dx": dxr,  "dy": dyr},
+    }
+}
+
+canvas_template = Template(r"""
 <div id="canvasWrap" style="
     width: 100%;
     overflow: auto;
@@ -231,13 +242,15 @@ html = f"""
 </div>
 
 <script>
+const DATA = $DATA_JSON;
+
 const wrap = document.getElementById("canvasWrap");
 let isDown = false;
 let startX = 0, startY = 0;
 let startScrollLeft = 0, startScrollTop = 0;
 let activePointerId = null;
 
-wrap.addEventListener("pointerdown", (e) => {{
+wrap.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   isDown = true;
   activePointerId = e.pointerId;
@@ -247,23 +260,23 @@ wrap.addEventListener("pointerdown", (e) => {{
   startScrollLeft = wrap.scrollLeft;
   startScrollTop = wrap.scrollTop;
   wrap.style.cursor = "grabbing";
-}});
+});
 
-wrap.addEventListener("pointermove", (e) => {{
+wrap.addEventListener("pointermove", (e) => {
   if (!isDown) return;
   if (activePointerId !== e.pointerId) return;
   const dx = e.clientX - startX;
   const dy = e.clientY - startY;
   wrap.scrollLeft = startScrollLeft - dx;
   wrap.scrollTop  = startScrollTop  - dy;
-}});
+});
 
-function endDrag(e) {{
+function endDrag(e) {
   if (activePointerId !== null && e.pointerId !== activePointerId) return;
   isDown = false;
   activePointerId = null;
   wrap.style.cursor = "grab";
-}}
+}
 wrap.addEventListener("pointerup", endDrag);
 wrap.addEventListener("pointercancel", endDrag);
 
@@ -277,192 +290,29 @@ ctx.clearRect(0, 0, W, H);
 ctx.fillStyle = "white";
 ctx.fillRect(0, 0, W, H);
 
-const xMin = {xMin};
-const xMax = {xMax};
-const yMin = {yMin};
-const yMax = {yMax};
+const xMin = DATA.xMin, xMax = DATA.xMax, yMin = DATA.yMin, yMax = DATA.yMax;
+const xticks = DATA.xticks, yticks = DATA.yticks;
 
-const padL = 70;
-const padR = 30;
-const padT = 30;
-const padB = 70;
+const padL = 70, padR = 30, padT = 30, padB = 70;
 
-function X(x) {{
+function X(x) {
   return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
-}}
-function Y(y) {{
+}
+function Y(y) {
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
-}}
+}
 
-function drawAxes() {{
+function drawAxes() {
   // grade
   ctx.strokeStyle = "#f0f0f0";
   ctx.lineWidth = 1;
 
-  const xticks = {xticks};
-  const yticks = {yticks};
-
-  xticks.forEach(t => {{
+  xticks.forEach(t => {
     const px = X(t);
     ctx.beginPath();
     ctx.moveTo(px, padT);
     ctx.lineTo(px, H - padB);
     ctx.stroke();
-  }});
-  yticks.forEach(t => {{
-    const py = Y(t);
-    ctx.beginPath();
-    ctx.moveTo(padL, py);
-    ctx.lineTo(W - padR, py);
-    ctx.stroke();
-  }});
-
-  // eixos principais (x=0 e y=0 se estiverem no range)
-  ctx.strokeStyle = "#111";
-  ctx.lineWidth = 2;
-
-  if (0 >= xMin && 0 <= xMax) {{
-    const px0 = X(0);
-    ctx.beginPath();
-    ctx.moveTo(px0, padT);
-    ctx.lineTo(px0, H - padB);
-    ctx.stroke();
-  }}
-  if (0 >= yMin && 0 <= yMax) {{
-    const py0 = Y(0);
-    ctx.beginPath();
-    ctx.moveTo(padL, py0);
-    ctx.lineTo(W - padR, py0);
-    ctx.stroke();
-  }}
-
-  // ticks + rótulos
-  ctx.fillStyle = "#111";
-  ctx.font = "13px Arial";
-
-  // ticks x
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  xticks.forEach(t => {{
-    const px = X(t);
-    const py = H - padB;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px, py + 6);
-    ctx.stroke();
-    ctx.fillText(String(t).replace(".", ","), px, py + 8);
-  }});
-
-  // ticks y
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  yticks.forEach(t => {{
-    const py = Y(t);
-    const px = padL;
-    ctx.beginPath();
-    ctx.moveTo(px - 6, py);
-    ctx.lineTo(px, py);
-    ctx.stroke();
-    ctx.fillText(String(t).replace(".", ","), px - 10, py);
-  }});
-
-  ctx.textAlign = "right";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("x (m)", W - padR, H - 8);
-
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillText("y (m)", 10, 8);
-}}
-
-function borderColorByCharge(q) {{
-  const eps = 1e-15;
-  if (q > eps) return "#d62728";
-  if (q < -eps) return "#1f77b4";
-  return "#111";
-}}
-
-function drawParticle(x, y, n, qText, qValue) {{
-  const px = X(x);
-  const py = Y(y);
-
-  ctx.fillStyle = "#f7f7f7";
-  ctx.strokeStyle = borderColorByCharge(qValue);
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(px, py, 16, 0, 2*Math.PI);
-  ctx.fill();
-  ctx.stroke();
-
-  // número
-  ctx.fillStyle = "#111";
-  ctx.font = "bold 16px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(n), px, py);
-
-  // label (q e coords) - sem template literals
-  const qSub = {{1: "q₁", 2: "q₂", 3: "q₃"}};
-  ctx.font = "13px Arial";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  const text1 = qSub[n] + " = " + qText;
-  const text2 = "(" + x.toFixed(1).replace(".", ",") + ", " + y.toFixed(1).replace(".", ",") + ") m";
-  const offx = 20, offy = -26;
-  ctx.fillText(text1, px + offx, py + offy);
-  ctx.fillText(text2, px + offx, py + offy + 16);
-
-  return {{px: px, py: py}};
-}}
-
-function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
-  ctx.save();
-  ctx.font = "14px Arial";
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-
-  const w = ctx.measureText(text).width;
-  let xLeft = xAnchor;
-  if (align === "right") xLeft = xAnchor - w;
-  if (align === "center") xLeft = xAnchor - w/2;
-
-  const yArrow = yBaseline - 16;
-  ctx.beginPath();
-  ctx.moveTo(xLeft, yArrow);
-  ctx.lineTo(xLeft + w, yArrow);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(xLeft + w, yArrow);
-  ctx.lineTo(xLeft + w - 6, yArrow - 4);
-  ctx.lineTo(xLeft + w - 6, yArrow + 4);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.restore();
-}}
-
-function drawArrow2D(x0, y0, dx, dy, color, label) {{
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 3;
-
-  const x1 = x0 + dx;
-  const y1 = y0 + dy;
-
-  if (dx === 0 && dy === 0) {{
-    ctx.beginPath();
-    ctx.arc(x0, y0, 6, 0, 2*Math.PI);
-    ctx.stroke();
-
-    ctx.font = "14px Arial";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label + " ≈ 0", x0 + 12, y0);
-    drawVectorOverLabel(label, x0 + 12, y0, "left", color);
-    return;
-  }}
-
-  ctx.beginPath();
-  ctx.moveTo(x
+  });
+  yticks.forEach(t => {
+    const py = Y
