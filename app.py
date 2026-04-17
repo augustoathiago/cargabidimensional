@@ -51,13 +51,13 @@ def latex_charge_C_from_uC(q_uC: float) -> str:
 
 def arrow_x(val, tol=0.0):
     if abs(val) <= tol:
-        return "⟷"
-    return "→" if val > 0 else "←"
+        return r"\leftrightarrow"
+    return r"\rightarrow" if val > 0 else r"\leftarrow"
 
 def arrow_y(val, tol=0.0):
     if abs(val) <= tol:
-        return "↕"
-    return "↑" if val > 0 else "↓"
+        return r"\updownarrow"
+    return r"\uparrow" if val > 0 else r"\downarrow"
 
 def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
     """
@@ -151,14 +151,15 @@ Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
 
-# faixa fixa do gráfico: -15 a 15
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-ticks = list(range(-14, 15, 2))  # ticks de 2 em 2 (evita poluição com -15)
+
+# ticks de 2 em 2 (pedido)
+ticks = list(range(-14, 15, 2))
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
-col_p3 = color_charge(q3)
+col_p3 = color_charge(q3)  # partícula 3 com borda por carga
 
 maxF = max(abs(F13), abs(F23), abs(Fr), 1e-30)
 
@@ -187,36 +188,31 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
-// ---------------- Grade cinza claro (pedido) ----------------
+// grade cinza claro
 function drawGrid() {{
   const ticks = {ticks};
   ctx.save();
   ctx.strokeStyle = "#eeeeee";
   ctx.lineWidth = 1;
 
-  // verticais
   ticks.forEach(t => {{
+    // verticais
     ctx.beginPath();
     ctx.moveTo(X(t), Y(yMin));
     ctx.lineTo(X(t), Y(yMax));
     ctx.stroke();
-  }});
-  // horizontais
-  ticks.forEach(t => {{
+    // horizontais
     ctx.beginPath();
     ctx.moveTo(X(xMin), Y(t));
     ctx.lineTo(X(xMax), Y(t));
     ctx.stroke();
   }});
-
   ctx.restore();
 }}
 
-// ---------------- Eixos e ticks ----------------
 function drawAxes() {{
   drawGrid();
 
-  // eixos principais
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -234,7 +230,6 @@ function drawAxes() {{
   ctx.textBaseline = "top";
 
   ticks.forEach(t => {{
-    // ticks em x
     ctx.beginPath();
     ctx.moveTo(X(t), Y(0)-6);
     ctx.lineTo(X(t), Y(0)+6);
@@ -245,7 +240,6 @@ function drawAxes() {{
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   ticks.forEach(t => {{
-    // ticks em y
     ctx.beginPath();
     ctx.moveTo(X(0)-6, Y(t));
     ctx.lineTo(X(0)+6, Y(t));
@@ -253,7 +247,6 @@ function drawAxes() {{
     if (t !== 0) ctx.fillText(String(t), X(0)-10, Y(t));
   }});
 
-  // nomes dos eixos
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   ctx.fillText("x (m)", X(xMax), Y(0)-10);
@@ -281,7 +274,6 @@ function drawParticle(x,y,n,colorBorder) {{
 }}
 
 function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
-  // setinha sobre o rótulo para indicar vetor
   ctx.save();
   ctx.font = "14px Arial";
   ctx.strokeStyle = color;
@@ -316,13 +308,11 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   const x1 = x0 + dx;
   const y1 = y0 + dy;
 
-  // linha
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
   ctx.stroke();
 
-  // cabeça
   const ang = Math.atan2(dy, dx);
   const head = 10;
   ctx.beginPath();
@@ -332,7 +322,6 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   ctx.closePath();
   ctx.fill();
 
-  // rótulo
   ctx.font = "14px Arial";
   const align = (dx >= 0) ? "left" : "right";
   ctx.textAlign = align;
@@ -340,27 +329,22 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   const xText = x1 + (dx >= 0 ? 8 : -8);
   const yText = y1 - 6;
   ctx.fillText(label, xText, yText);
-
-  // seta em cima do rótulo (vetor)
   drawVectorOverLabel(label, xText, yText, align, color);
 
   ctx.restore();
 }}
 
 function drawDashedComponents(x0, y0, dx, dy, color) {{
-  // tracejado das componentes sem rótulos
   ctx.save();
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
 
-  // componente x
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x0 + dx, y0);
   ctx.stroke();
 
-  // componente y
   ctx.beginPath();
   ctx.moveTo(x0 + dx, y0);
   ctx.lineTo(x0 + dx, y0 + dy);
@@ -370,31 +354,19 @@ function drawDashedComponents(x0, y0, dx, dy, color) {{
   ctx.restore();
 }}
 
-// ============================
-// Limitar vetor para caber no retângulo útil (pedido 7)
-// Sem alterar escala dos eixos: "corta" o comprimento se necessário.
-// ============================
+// --------- limitador geométrico: garante que o vetor cabe ----------
 function maxLenToFit(x0, y0, ux, uy) {{
-  // retângulo útil
   const xmin = padL, xmax = W - padR;
   const ymin = padT, ymax = H - padB;
-
-  // evita divisão por zero
   const eps = 1e-9;
-
   let tMax = Infinity;
 
-  // interseção com x = xmin / xmax
   if (Math.abs(ux) > eps) {{
     const tx1 = (xmin - x0) / ux;
     const tx2 = (xmax - x0) / ux;
-    const tx = Math.max(Math.min(tx1, tx2), 0); // primeiro t >= 0 que pega borda mais próxima no sentido
-    // mas precisamos do menor t positivo que atinge qualquer borda, então:
     const candidates = [tx1, tx2].filter(t => t > 0);
     if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
   }}
-
-  // interseção com y = ymin / ymax
   if (Math.abs(uy) > eps) {{
     const ty1 = (ymin - y0) / uy;
     const ty2 = (ymax - y0) / uy;
@@ -402,9 +374,8 @@ function maxLenToFit(x0, y0, ux, uy) {{
     if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
   }}
 
-  // tMax é a distância paramétrica até sair; aplicamos folga
   if (!isFinite(tMax)) return 0;
-  return 0.92 * tMax; // folga para não colar na borda
+  return 0.92 * tMax;
 }}
 
 drawAxes();
@@ -413,18 +384,15 @@ const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
 const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
-// escala base por módulo relativo
 const maxF = {maxF};
-function vecPixFit(Fx, Fy, maxLen=150) {{
+
+function vecPixFit(Fx, Fy, maxLen=160) {{
   const mag = Math.hypot(Fx, Fy);
   if (mag === 0) return {{dx:0, dy:0}};
-
   const Lwanted = maxLen * (mag / maxF);
 
-  // unitário no canvas (y invertido)
   const ux = (Fx / mag);
-  const uy = (-Fy / mag);
-
+  const uy = (-Fy / mag); // y invertido
   const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
   const L = Math.min(Lwanted, Lfit);
 
@@ -447,9 +415,8 @@ drawDashedComponents(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c");
 """
 components.html(html, height=650)
 
-# ===================== Distâncias (sem fórmulas) =====================
+# ===================== Distâncias (só valores) =====================
 st.header("Distâncias")
-
 d1, d2 = st.columns(2)
 with d1:
     st.latex(rf"r_{{13}} = {latex_sci(r13, 2, r'\mathrm{{m}}')}")
@@ -461,18 +428,12 @@ st.header("Forças Eletrostáticas (2D)")
 
 st.latex(r"F_{13}=K\frac{|q_1q_3|}{r_{13}^2}")
 st.latex(r"F_{23}=K\frac{|q_2q_3|}{r_{23}^2}")
+st.latex(r"K = 9{,}0\times10^9\ \mathrm{N\,m^2/C^2}")
 
-# K corrigido (não aparece como texto cru)
-st.latex(r"K = 9{,}0\times10^9\ \mathrm{N\cdot m^2/C^2}")
+st.markdown("onde **q** são as cargas das partículas, **r** são as distâncias entre elas e **K** é a constante de Coulomb.")
 
-st.markdown(
-    "onde **q** são as cargas das partículas, **r** são as distâncias entre elas e **K** é a constante de Coulomb."
-)
+st.subheader("Substituição numérica (módulos)")
 
-# Substituição numérica
-st.subheader("Substituição numérica")
-
-# valores das cargas (em C) a partir dos sliders (µC)
 q1_ltx = latex_charge_C_from_uC(q1_uC)
 q2_ltx = latex_charge_C_from_uC(q2_uC)
 q3_ltx = latex_charge_C_from_uC(q3_uC)
@@ -480,21 +441,27 @@ q3_ltx = latex_charge_C_from_uC(q3_uC)
 r13_ltx = latex_sci_no_unit(r13, 2)
 r23_ltx = latex_sci_no_unit(r23, 2)
 
-st.latex(
-    rf"F_{{13}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q1_ltx})({q3_ltx})\right|}}{{({r13_ltx})^2}}"
-)
+st.latex(rf"F_{{13}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q1_ltx})({q3_ltx})\right|}}{{({r13_ltx})^2}}")
 st.latex(rf"F_{{13}} = {latex_sci(abs(F13_d), 2, r'\mathrm{{N}}')}")
 
-st.latex(
-    rf"F_{{23}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q2_ltx})({q3_ltx})\right|}}{{({r23_ltx})^2}}"
-)
+st.latex(rf"F_{{23}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q2_ltx})({q3_ltx})\right|}}{{({r23_ltx})^2}}")
 st.latex(rf"F_{{23}} = {latex_sci(abs(F23_d), 2, r'\mathrm{{N}}')}")
+
+# ===================== Cálculos de Fr (recolocados) =====================
+st.subheader("Força resultante (cálculos)")
+
+st.latex(r"\vec{F}_r=\vec{F}_{13}+\vec{F}_{23}")
+st.latex(r"F_{rx}=F_{13x}+F_{23x}\quad;\quad F_{ry}=F_{13y}+F_{23y}")
+st.latex(r"F_r=\sqrt{F_{rx}^2+F_{ry}^2}")
+
+st.latex(rf"F_{{rx}} = ({latex_sci(Fx13_d, 2, r'\mathrm{{N}}')}) + ({latex_sci(Fx23_d, 2, r'\mathrm{{N}}')}) = {latex_sci(Fxr_d, 2, r'\mathrm{{N}}')}")
+st.latex(rf"F_{{ry}} = ({latex_sci(Fy13_d, 2, r'\mathrm{{N}}')}) + ({latex_sci(Fy23_d, 2, r'\mathrm{{N}}')}) = {latex_sci(Fyr_d, 2, r'\mathrm{{N}}')}")
+st.latex(rf"F_r = \sqrt{{({latex_sci(Fxr_d,2,r'\mathrm{{N}}')})^2 + ({latex_sci(Fyr_d,2,r'\mathrm{{N}}')})^2}} = {latex_sci(Fr_d, 2, r'\mathrm{{N}}')}")
 
 # ===================== Resultados =====================
 st.header("Resultados (módulo, componentes e direção)")
 
 def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
-    # strings latex
     mag_s = latex_sci(sig(Fmag, 2), 2, r"\mathrm{N}")
     fx_s  = latex_sci(sig(Fx,   2), 2, r"\mathrm{N}")
     fy_s  = latex_sci(sig(Fy,   2), 2, r"\mathrm{N}")
@@ -503,8 +470,8 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
     st.markdown(
         f"""
         <div style="background:#ffffff;border:1px solid #eee;border-radius:14px;
-                    padding:14px 16px; box-shadow:0 1px 8px rgba(0,0,0,0.06);">
-          <div style="font-size:14px;color:#333;margin-bottom:10px;">
+                    padding:12px 14px; box-shadow:0 1px 8px rgba(0,0,0,0.06);">
+          <div style="font-size:14px;color:#333;">
             <b style="color:{color};">●</b> <b>{title}</b>
           </div>
         </div>
@@ -512,16 +479,14 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
         unsafe_allow_html=True
     )
 
-    # módulo
+    # Módulo
     st.latex(rf"{label_main} = {mag_s}")
 
-    # componentes com setas ao lado (pedido 1)
-    # (usa math inline + unicode setas)
-    st.markdown(
-        rf"$ {label_main}x = {fx_s}\ $ **{arrow_x(sig(Fx,2))}**"
-        rf"&nbsp;&nbsp;&nbsp;&nbsp;"
-        rf"$ {label_main}y = {fy_s}\ $ **{arrow_y(sig(Fy,2))}**",
-        unsafe_allow_html=True
+    # Componentes + setas (tudo em LaTeX, fica bonito e não “quebra”)
+    st.latex(
+        rf"{label_main}x = {fx_s}\ {arrow_x(sig(Fx,2))}"
+        rf"\qquad,\qquad"
+        rf"{label_main}y = {fy_s}\ {arrow_y(sig(Fy,2))}"
     )
 
     st.latex(rf"\theta = {th_s}^\circ")
@@ -533,3 +498,6 @@ with colA:
 with colB:
     results_block("Força na partícula 3 devido à partícula 2", "#1f77b4",
                   abs(F23), Fx23, Fy23, th23, r"F_{23}")
+with colC:
+    results_block("Força resultante na partícula 3", "#2ca02c",
+                  abs(Fr),  Fxr,  Fyr,  thr,  r"F_{r}")
