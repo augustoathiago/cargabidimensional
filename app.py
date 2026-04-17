@@ -153,9 +153,7 @@ st.header("Figura – Sistema Bidimensional")
 
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-
-# ticks de 2 em 2 (pedido)
-ticks = list(range(-14, 15, 2))
+ticks = list(range(-14, 15, 2))  # ticks de 2 em 2
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
@@ -174,7 +172,6 @@ const canvas = document.getElementById("canvas2d");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
-// fundo branco
 ctx.fillStyle = "white";
 ctx.fillRect(0,0,W,H);
 
@@ -188,7 +185,6 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
-// grade cinza claro
 function drawGrid() {{
   const ticks = {ticks};
   ctx.save();
@@ -196,16 +192,8 @@ function drawGrid() {{
   ctx.lineWidth = 1;
 
   ticks.forEach(t => {{
-    // verticais
-    ctx.beginPath();
-    ctx.moveTo(X(t), Y(yMin));
-    ctx.lineTo(X(t), Y(yMax));
-    ctx.stroke();
-    // horizontais
-    ctx.beginPath();
-    ctx.moveTo(X(xMin), Y(t));
-    ctx.lineTo(X(xMax), Y(t));
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(t), Y(yMin)); ctx.lineTo(X(t), Y(yMax)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(xMin), Y(t)); ctx.lineTo(X(xMax), Y(t)); ctx.stroke();
   }});
   ctx.restore();
 }}
@@ -216,13 +204,10 @@ function drawAxes() {{
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(X(xMin), Y(0));
-  ctx.lineTo(X(xMax), Y(0));
-  ctx.moveTo(X(0), Y(yMin));
-  ctx.lineTo(X(0), Y(yMax));
+  ctx.moveTo(X(xMin), Y(0)); ctx.lineTo(X(xMax), Y(0));
+  ctx.moveTo(X(0), Y(yMin)); ctx.lineTo(X(0), Y(yMax));
   ctx.stroke();
 
-  // ticks e labels
   const ticks = {ticks};
   ctx.fillStyle = "#111";
   ctx.font = "12px Arial";
@@ -230,20 +215,14 @@ function drawAxes() {{
   ctx.textBaseline = "top";
 
   ticks.forEach(t => {{
-    ctx.beginPath();
-    ctx.moveTo(X(t), Y(0)-6);
-    ctx.lineTo(X(t), Y(0)+6);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(t), Y(0)-6); ctx.lineTo(X(t), Y(0)+6); ctx.stroke();
     ctx.fillText(String(t), X(t), Y(0)+10);
   }});
 
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   ticks.forEach(t => {{
-    ctx.beginPath();
-    ctx.moveTo(X(0)-6, Y(t));
-    ctx.lineTo(X(0)+6, Y(t));
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(0)-6, Y(t)); ctx.lineTo(X(0)+6, Y(t)); ctx.stroke();
     if (t !== 0) ctx.fillText(String(t), X(0)-10, Y(t));
   }});
 
@@ -260,11 +239,7 @@ function drawParticle(x,y,n,colorBorder) {{
   ctx.fillStyle = "#fafafa";
   ctx.strokeStyle = colorBorder;
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(px, py, 16, 0, 2*Math.PI);
-  ctx.fill();
-  ctx.stroke();
-
+  ctx.beginPath(); ctx.arc(px, py, 16, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#111";
   ctx.font = "bold 16px Arial";
   ctx.textAlign = "center";
@@ -279,23 +254,17 @@ function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = 2;
-
   const w = ctx.measureText(text).width;
   let xLeft = xAnchor;
   if (align === "right") xLeft = xAnchor - w;
-
   const yArrow = yBaseline - 16;
-  ctx.beginPath();
-  ctx.moveTo(xLeft, yArrow);
-  ctx.lineTo(xLeft + w, yArrow);
-  ctx.stroke();
 
+  ctx.beginPath(); ctx.moveTo(xLeft, yArrow); ctx.lineTo(xLeft + w, yArrow); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(xLeft + w, yArrow);
   ctx.lineTo(xLeft + w - 6, yArrow - 4);
   ctx.lineTo(xLeft + w - 6, yArrow + 4);
-  ctx.closePath();
-  ctx.fill();
+  ctx.closePath(); ctx.fill();
   ctx.restore();
 }}
 
@@ -305,13 +274,8 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   ctx.fillStyle = color;
   ctx.lineWidth = 3;
 
-  const x1 = x0 + dx;
-  const y1 = y0 + dy;
-
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
+  const x1 = x0 + dx, y1 = y0 + dy;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
 
   const ang = Math.atan2(dy, dx);
   const head = 10;
@@ -319,8 +283,7 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   ctx.moveTo(x1, y1);
   ctx.lineTo(x1 - head*Math.cos(ang - Math.PI/6), y1 - head*Math.sin(ang - Math.PI/6));
   ctx.lineTo(x1 - head*Math.cos(ang + Math.PI/6), y1 - head*Math.sin(ang + Math.PI/6));
-  ctx.closePath();
-  ctx.fill();
+  ctx.closePath(); ctx.fill();
 
   ctx.font = "14px Arial";
   const align = (dx >= 0) ? "left" : "right";
@@ -330,7 +293,6 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   const yText = y1 - 6;
   ctx.fillText(label, xText, yText);
   drawVectorOverLabel(label, xText, yText, align, color);
-
   ctx.restore();
 }}
 
@@ -340,21 +302,13 @@ function drawDashedComponents(x0, y0, dx, dy, color) {{
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
 
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x0 + dx, y0);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(x0 + dx, y0);
-  ctx.lineTo(x0 + dx, y0 + dy);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx, y0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x0 + dx, y0); ctx.lineTo(x0 + dx, y0 + dy); ctx.stroke();
 
   ctx.setLineDash([]);
   ctx.restore();
 }}
 
-// --------- limitador geométrico: garante que o vetor cabe ----------
 function maxLenToFit(x0, y0, ux, uy) {{
   const xmin = padL, xmax = W - padR;
   const ymin = padT, ymax = H - padB;
@@ -373,19 +327,16 @@ function maxLenToFit(x0, y0, ux, uy) {{
     const candidates = [ty1, ty2].filter(t => t > 0);
     if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
   }}
-
   if (!isFinite(tMax)) return 0;
   return 0.92 * tMax;
 }}
 
 drawAxes();
-
 const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
 const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
 const maxF = {maxF};
-
 function vecPixFit(Fx, Fy, maxLen=160) {{
   const mag = Math.hypot(Fx, Fy);
   if (mag === 0) return {{dx:0, dy:0}};
@@ -393,6 +344,7 @@ function vecPixFit(Fx, Fy, maxLen=160) {{
 
   const ux = (Fx / mag);
   const uy = (-Fy / mag); // y invertido
+
   const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
   const L = Math.min(Lwanted, Lfit);
 
@@ -442,21 +394,10 @@ r13_ltx = latex_sci_no_unit(r13, 2)
 r23_ltx = latex_sci_no_unit(r23, 2)
 
 st.latex(rf"F_{{13}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q1_ltx})({q3_ltx})\right|}}{{({r13_ltx})^2}}")
-st.latex(rf"F_{{13}} = {latex_sci(abs(F13_d), 2, r'\mathrm{{N}}')}")
+st.latex(rf"F_{{13}} = {latex_sci(abs(sig(F13,2)), 2, r'\mathrm{{N}}')}")
 
 st.latex(rf"F_{{23}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q2_ltx})({q3_ltx})\right|}}{{({r23_ltx})^2}}")
-st.latex(rf"F_{{23}} = {latex_sci(abs(F23_d), 2, r'\mathrm{{N}}')}")
-
-# ===================== Cálculos de Fr (recolocados) =====================
-st.subheader("Força resultante (cálculos)")
-
-st.latex(r"\vec{F}_r=\vec{F}_{13}+\vec{F}_{23}")
-st.latex(r"F_{rx}=F_{13x}+F_{23x}\quad;\quad F_{ry}=F_{13y}+F_{23y}")
-st.latex(r"F_r=\sqrt{F_{rx}^2+F_{ry}^2}")
-
-st.latex(rf"F_{{rx}} = ({latex_sci(Fx13_d, 2, r'\mathrm{{N}}')}) + ({latex_sci(Fx23_d, 2, r'\mathrm{{N}}')}) = {latex_sci(Fxr_d, 2, r'\mathrm{{N}}')}")
-st.latex(rf"F_{{ry}} = ({latex_sci(Fy13_d, 2, r'\mathrm{{N}}')}) + ({latex_sci(Fy23_d, 2, r'\mathrm{{N}}')}) = {latex_sci(Fyr_d, 2, r'\mathrm{{N}}')}")
-st.latex(rf"F_r = \sqrt{{({latex_sci(Fxr_d,2,r'\mathrm{{N}}')})^2 + ({latex_sci(Fyr_d,2,r'\mathrm{{N}}')})^2}} = {latex_sci(Fr_d, 2, r'\mathrm{{N}}')}")
+st.latex(rf"F_{{23}} = {latex_sci(abs(sig(F23,2)), 2, r'\mathrm{{N}}')}")
 
 # ===================== Resultados =====================
 st.header("Resultados (módulo, componentes e direção)")
@@ -479,13 +420,12 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
         unsafe_allow_html=True
     )
 
-    # Módulo
     st.latex(rf"{label_main} = {mag_s}")
 
-    # Componentes + setas (tudo em LaTeX, fica bonito e não “quebra”)
+    # ✅ CORREÇÃO: espaço após o segundo \qquad para não virar \qquadF...
     st.latex(
         rf"{label_main}x = {fx_s}\ {arrow_x(sig(Fx,2))}"
-        rf"\qquad,\qquad"
+        rf"\qquad,\qquad "   # <-- espaço aqui é essencial
         rf"{label_main}y = {fy_s}\ {arrow_y(sig(Fy,2))}"
     )
 
@@ -501,3 +441,4 @@ with colB:
 with colC:
     results_block("Força resultante na partícula 3", "#2ca02c",
                   abs(Fr),  Fxr,  Fyr,  thr,  r"F_{r}")
+``
