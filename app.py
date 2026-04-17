@@ -148,12 +148,16 @@ Fx13_d, Fy13_d, F13_d = sig(Fx13, 2), sig(Fy13, 2), sig(F13, 2)
 Fx23_d, Fy23_d, F23_d = sig(Fx23, 2), sig(Fy23, 2), sig(F23, 2)
 Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
 
+# produtos para sentido (atração/repulsão) se precisar no futuro
+prod13 = q1 * q3
+prod23 = q2 * q3
+
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
 
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-ticks = list(range(-14, 15, 2))  # ticks de 2 em 2 (inclui 0)
+ticks = list(range(-14, 15, 2))
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
@@ -176,11 +180,26 @@ ctx.fillRect(0,0,W,H);
 const xMin = {xMin}, xMax = {xMax}, yMin = {yMin}, yMax = {yMax};
 const padL = 60, padR = 30, padT = 25, padB = 55;
 
+// =====================================================
+// ✅ ESCALA ISOMÉTRICA (ticks iguais em X e Y)
+// =====================================================
+const plotW = (W - padL - padR);
+const plotH = (H - padT - padB);
+const rangeX = (xMax - xMin);
+const rangeY = (yMax - yMin);
+
+const scaleX = plotW / rangeX;
+const scaleY = plotH / rangeY;
+const scale  = Math.min(scaleX, scaleY);
+
+const extraX = plotW - scale * rangeX;
+const extraY = plotH - scale * rangeY;
+
 function X(x) {{
-  return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
+  return padL + extraX/2 + (x - xMin) * scale;
 }}
 function Y(y) {{
-  return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
+  return padT + extraY/2 + (yMax - y) * scale;
 }}
 
 // ---------------- Grade cinza claro ----------------
@@ -191,13 +210,11 @@ function drawGrid() {{
   ctx.lineWidth = 1;
 
   ticks.forEach(t => {{
-    // verticais
     ctx.beginPath();
     ctx.moveTo(X(t), Y(yMin));
     ctx.lineTo(X(t), Y(yMax));
     ctx.stroke();
 
-    // horizontais
     ctx.beginPath();
     ctx.moveTo(X(xMin), Y(t));
     ctx.lineTo(X(xMax), Y(t));
@@ -348,17 +365,14 @@ const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
 // =====================================================
-// ✅ NOVA ESCALA (CORRETA): UMA ÚNICA ESCALA PARA Fx e Fy
-// Usando a “folga” do gráfico: partículas em [-10,10] e plano em [-15,15].
-// Definimos um comprimento didático máximo em metros (Lworld_max) e convertemos para pixels.
+// ✅ ESCALA DOS VETORES (CORRETA): mesma escala linear para Fx/Fy
+// usando a folga do gráfico (-15..15) vs partículas (-10..10)
 // =====================================================
-
-// forças físicas (N)
 const Fx13 = {Fx13}, Fy13 = {Fy13};
 const Fx23 = {Fx23}, Fy23 = {Fy23};
 const Fxr  = {Fxr},  Fyr  = {Fyr};
 
-// referência: maior componente absoluta (evita distorção de módulo)
+// maior componente absoluta (referência)
 const Fref = Math.max(
   Math.abs(Fx13), Math.abs(Fy13),
   Math.abs(Fx23), Math.abs(Fy23),
@@ -366,21 +380,17 @@ const Fref = Math.max(
   1e-30
 );
 
-// pixels por metro (escala do próprio gráfico)
-const pixPerMeterX = (W - padL - padR) / (xMax - xMin);
+// comprimento máximo desejado em "metros do gráfico"
+const Lworld_max = 4.0;                 // m (cabe bem na folga)
+const LmaxPx = scale * Lworld_max;      // px (usa a MESMA escala do gráfico)
 
-// comprimento máximo em "metros do gráfico" para o maior vetor
-// (folga típica ~5 m até borda, usamos 4 m para sobrar espaço p/ seta + rótulo)
-const Lworld_max = 4.0;  // m
-const LmaxPx = pixPerMeterX * Lworld_max;
-
-// fator N -> pixel (mesmo para todos)
+// fator N -> px
 const S = LmaxPx / Fref;
 
-// Converte (Fx, Fy) em (dx, dy) em pixels, com clipping se necessário
+// converte força -> vetor em px, com clipping por borda
 function vecFromForce(Fx, Fy) {{
   let dx = S * Fx;
-  let dy = -S * Fy; // canvas tem y invertido
+  let dy = -S * Fy; // y invertido no canvas
 
   const mag = Math.hypot(dx, dy);
   if (mag === 0) return {{dx:0, dy:0}};
@@ -394,7 +404,6 @@ function vecFromForce(Fx, Fy) {{
     dx *= k;
     dy *= k;
   }}
-
   return {{dx, dy}};
 }}
 
