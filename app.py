@@ -143,7 +143,7 @@ Fyr = Fy13 + Fy23
 Fr  = math.hypot(Fxr, Fyr)
 thr = math.degrees(math.atan2(Fyr, Fxr)) if Fr != 0 else 0.0
 
-# versão didática 2 AS (para exibir nos resultados)
+# versão didática (2 AS) para exibir
 Fx13_d, Fy13_d, F13_d = sig(Fx13, 2), sig(Fy13, 2), sig(F13, 2)
 Fx23_d, Fy23_d, F23_d = sig(Fx23, 2), sig(Fy23, 2), sig(F23, 2)
 Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
@@ -152,18 +152,26 @@ Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
 prod13 = q1 * q3
 prod23 = q2 * q3
 
+# ===================== Escala "inteligente" (para passar ao JS) =====================
+# Referência F0: mediana dos módulos não nulos (evita distorção quando há outlier enorme)
+mags = [abs(F13), abs(F23), abs(Fr)]
+mags_nz = sorted([m for m in mags if m > 0])
+if mags_nz:
+    F0 = mags_nz[len(mags_nz)//2]  # mediana
+else:
+    F0 = 1.0  # fallback
+Fmax = max(mags) if max(mags) > 0 else 1.0
+
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
 
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-ticks = list(range(-14, 15, 2))  # ticks de 2 em 2 (inclui 0)
+ticks = list(range(-14, 15, 2))  # ticks de 2 em 2
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
-col_p3 = color_charge(q3)  # partícula 3 com borda por carga
-
-maxF = max(abs(F13), abs(F23), abs(Fr), 1e-30)
+col_p3 = color_charge(q3)
 
 html = f"""
 <div style="background:white;padding:6px;border-radius:14px;border:1px solid #eee;">
@@ -189,7 +197,7 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
-// ---------------- Grade cinza claro ----------------
+// grade cinza claro
 function drawGrid() {{
   const ticks = {ticks};
   ctx.save();
@@ -197,13 +205,11 @@ function drawGrid() {{
   ctx.lineWidth = 1;
 
   ticks.forEach(t => {{
-    // verticais
     ctx.beginPath();
     ctx.moveTo(X(t), Y(yMin));
     ctx.lineTo(X(t), Y(yMax));
     ctx.stroke();
 
-    // horizontais
     ctx.beginPath();
     ctx.moveTo(X(xMin), Y(t));
     ctx.lineTo(X(xMax), Y(t));
@@ -212,7 +218,6 @@ function drawGrid() {{
   ctx.restore();
 }}
 
-// ---------------- Eixos e ticks ----------------
 function drawAxes() {{
   drawGrid();
 
@@ -313,7 +318,6 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
 }}
 
 function drawDashedComponents(x0, y0, dx, dy, color) {{
-  // tracejado das componentes sem rótulos
   ctx.save();
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = color;
@@ -350,22 +354,47 @@ function maxLenToFit(x0, y0, ux, uy) {{
 }}
 
 drawAxes();
+
 const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
 const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
-const maxF = {maxF};
+// ===================== NOVA ESCALA DE COMPRIMENTO (melhoria) =====================
+// - Usa o tamanho útil do gráfico para definir Lmax
+// - Usa escala log para evitar distorções (forças muito diferentes)
+const F0 = {F0};     // referência (mediana)
+const Fmax = {Fmax}; // maior módulo
+
+function lengthFromForce(mag) {{
+  if (mag <= 0) return 0;
+
+  const innerW = (W - padL - padR);
+  const innerH = (H - padT - padB);
+
+  // aproveita a "folga" do gráfico -15..15 (sem mexer nos eixos)
+  const Lmax = 0.42 * Math.min(innerW, innerH);   // ~42% do menor lado útil
+  const Lmin = 26;                                // mínimo visível
+
+  // normalização logarítmica (compressão)
+  const denom = Math.log10(1 + (Fmax / F0));
+  const numer = Math.log10(1 + (mag  / F0));
+  const t = denom > 0 ? (numer / denom) : 0;      // 0..1
+
+  return Lmin + (Lmax - Lmin) * Math.min(Math.max(t, 0), 1);
+}}
 
 // Vetor em pixels a partir de (Fx, Fy) (para Fr)
-function vecPixFit(Fx, Fy, maxLen=180) {{
+function vecPixSmart(Fx, Fy) {{
   const mag = Math.hypot(Fx, Fy);
   if (mag === 0) return {{dx:0, dy:0}};
-  const Lwanted = maxLen * (mag / maxF);
+
+  const Lwanted = lengthFromForce(mag);
 
   // unitário no canvas (y invertido)
   const ux = Fx / mag;
   const uy = -Fy / mag;
 
+  // limita para caber
   const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
   const L = Math.min(Lwanted, Lfit);
 
@@ -373,7 +402,7 @@ function vecPixFit(Fx, Fy, maxLen=180) {{
 }}
 
 // Vetor central: sempre colinear com a linha que liga as partículas (P3 com P1/P2)
-function vecAlongLineFit(Pa, Pb, sign, mag, maxLen=160) {{
+function vecAlongLineSmart(Pa, Pb, sign, mag) {{
   if (mag === 0 || sign === 0) return {{dx:0, dy:0}};
 
   const dxL = (Pa.px - Pb.px);
@@ -381,7 +410,6 @@ function vecAlongLineFit(Pa, Pb, sign, mag, maxLen=160) {{
   const dist = Math.hypot(dxL, dyL);
   if (dist === 0) return {{dx:0, dy:0}};
 
-  // unitário ao longo da reta (em pixels)
   let ux = dxL / dist;
   let uy = dyL / dist;
 
@@ -389,10 +417,8 @@ function vecAlongLineFit(Pa, Pb, sign, mag, maxLen=160) {{
   ux *= sign;
   uy *= sign;
 
-  // comprimento desejado proporcional ao módulo
-  const Lwanted = maxLen * (mag / maxF);
+  const Lwanted = lengthFromForce(mag);
 
-  // limita para caber
   const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
   const L = Math.min(Lwanted, Lfit);
 
@@ -402,12 +428,9 @@ function vecAlongLineFit(Pa, Pb, sign, mag, maxLen=160) {{
 const s13 = Math.sign({prod13});
 const s23 = Math.sign({prod23});
 
-// ✅ Agora F13 e F23 ficam na direção da linha 1–3 e 2–3
-const v13 = vecAlongLineFit(P3, P1, s13, Math.abs({F13}), 160);
-const v23 = vecAlongLineFit(P3, P2, s23, Math.abs({F23}), 160);
-
-// Resultante (pela soma vetorial)
-const vr  = vecPixFit({Fxr}, {Fyr}, 180);
+const v13 = vecAlongLineSmart(P3, P1, s13, Math.abs({F13}));
+const v23 = vecAlongLineSmart(P3, P2, s23, Math.abs({F23}));
+const vr  = vecPixSmart({Fxr}, {Fyr});
 
 drawArrowPix(P3.px, P3.py, v13.dx, v13.dy, "#d62728", "F₁₃");
 drawDashedComponents(P3.px, P3.py, v13.dx, v13.dy, "#d62728");
@@ -429,7 +452,7 @@ with d1:
 with d2:
     st.latex(rf"r_{{23}} = {latex_sci(r23, 2, r'\mathrm{{m}}')}")
 
-# ===================== Forças Eletrostáticas (2D) =====================
+# ===================== Forças Eletrostáticas =====================
 st.header("Forças Eletrostáticas")
 
 st.latex(r"F_{13}=K\frac{|q_1q_3|}{r_{13}^2}")
@@ -475,7 +498,6 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
 
     st.latex(rf"{label_main} = {mag_s}")
 
-    # componentes + setas (com correção do \qquad para não "grudar" no F)
     st.latex(
         rf"{label_main}x = {fx_s}\ {arrow_x(sig(Fx,2))}"
         rf"\qquad,\qquad "
@@ -494,3 +516,4 @@ with colB:
 with colC:
     results_block("Força resultante na partícula 3", "#2ca02c",
                   abs(Fr),  Fxr,  Fyr,  thr,  r"F_{r}")
+``
