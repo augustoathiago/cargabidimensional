@@ -430,7 +430,7 @@ with d2:
     st.latex(rf"r_{{23}} = {latex_sci(r23, 2, r'\mathrm{{m}}')}")
 
 # ===================== Forças Eletrostáticas (2D) =====================
-st.header("Forças Eletrostáticas (2D)")
+st.header("Forças Eletrostáticas")
 
 st.latex(r"F_{13}=K\frac{|q_1q_3|}{r_{13}^2}")
 st.latex(r"F_{23}=K\frac{|q_2q_3|}{r_{23}^2}")
