@@ -143,17 +143,21 @@ Fyr = Fy13 + Fy23
 Fr  = math.hypot(Fxr, Fyr)
 thr = math.degrees(math.atan2(Fyr, Fxr)) if Fr != 0 else 0.0
 
-# exibição com 2 AS
+# versão didática 2 AS (para exibir nos resultados)
 Fx13_d, Fy13_d, F13_d = sig(Fx13, 2), sig(Fy13, 2), sig(F13, 2)
 Fx23_d, Fy23_d, F23_d = sig(Fx23, 2), sig(Fy23, 2), sig(F23, 2)
 Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
+
+# produtos para sentido (atração/repulsão) na direção central
+prod13 = q1 * q3
+prod23 = q2 * q3
 
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
 
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-ticks = list(range(-14, 15, 2))  # ticks de 2 em 2
+ticks = list(range(-14, 15, 2))  # ticks de 2 em 2 (inclui 0)
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
@@ -185,6 +189,7 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
+// ---------------- Grade cinza claro ----------------
 function drawGrid() {{
   const ticks = {ticks};
   ctx.save();
@@ -192,12 +197,22 @@ function drawGrid() {{
   ctx.lineWidth = 1;
 
   ticks.forEach(t => {{
-    ctx.beginPath(); ctx.moveTo(X(t), Y(yMin)); ctx.lineTo(X(t), Y(yMax)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(X(xMin), Y(t)); ctx.lineTo(X(xMax), Y(t)); ctx.stroke();
+    // verticais
+    ctx.beginPath();
+    ctx.moveTo(X(t), Y(yMin));
+    ctx.lineTo(X(t), Y(yMax));
+    ctx.stroke();
+
+    // horizontais
+    ctx.beginPath();
+    ctx.moveTo(X(xMin), Y(t));
+    ctx.lineTo(X(xMax), Y(t));
+    ctx.stroke();
   }});
   ctx.restore();
 }}
 
+// ---------------- Eixos e ticks ----------------
 function drawAxes() {{
   drawGrid();
 
@@ -293,10 +308,12 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
   const yText = y1 - 6;
   ctx.fillText(label, xText, yText);
   drawVectorOverLabel(label, xText, yText, align, color);
+
   ctx.restore();
 }}
 
 function drawDashedComponents(x0, y0, dx, dy, color) {{
+  // tracejado das componentes sem rótulos
   ctx.save();
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = color;
@@ -309,6 +326,7 @@ function drawDashedComponents(x0, y0, dx, dy, color) {{
   ctx.restore();
 }}
 
+// --------- limitador geométrico: garante que o vetor cabe ----------
 function maxLenToFit(x0, y0, ux, uy) {{
   const xmin = padL, xmax = W - padR;
   const ymin = padT, ymax = H - padB;
@@ -337,13 +355,16 @@ const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
 const maxF = {maxF};
-function vecPixFit(Fx, Fy, maxLen=160) {{
+
+// Vetor em pixels a partir de (Fx, Fy) (para Fr)
+function vecPixFit(Fx, Fy, maxLen=180) {{
   const mag = Math.hypot(Fx, Fy);
   if (mag === 0) return {{dx:0, dy:0}};
   const Lwanted = maxLen * (mag / maxF);
 
-  const ux = (Fx / mag);
-  const uy = (-Fy / mag); // y invertido
+  // unitário no canvas (y invertido)
+  const ux = Fx / mag;
+  const uy = -Fy / mag;
 
   const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
   const L = Math.min(Lwanted, Lfit);
@@ -351,9 +372,42 @@ function vecPixFit(Fx, Fy, maxLen=160) {{
   return {{dx: ux*L, dy: uy*L}};
 }}
 
-const v13 = vecPixFit({Fx13}, {Fy13}, 160);
-const v23 = vecPixFit({Fx23}, {Fy23}, 160);
-const vr  = vecPixFit({Fxr},  {Fyr},  180);
+// Vetor central: sempre colinear com a linha que liga as partículas (P3 com P1/P2)
+function vecAlongLineFit(Pa, Pb, sign, mag, maxLen=160) {{
+  if (mag === 0 || sign === 0) return {{dx:0, dy:0}};
+
+  const dxL = (Pa.px - Pb.px);
+  const dyL = (Pa.py - Pb.py);
+  const dist = Math.hypot(dxL, dyL);
+  if (dist === 0) return {{dx:0, dy:0}};
+
+  // unitário ao longo da reta (em pixels)
+  let ux = dxL / dist;
+  let uy = dyL / dist;
+
+  // sentido: repulsão (+) aponta de Pb para Pa; atração (-) inverte
+  ux *= sign;
+  uy *= sign;
+
+  // comprimento desejado proporcional ao módulo
+  const Lwanted = maxLen * (mag / maxF);
+
+  // limita para caber
+  const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
+  const L = Math.min(Lwanted, Lfit);
+
+  return {{dx: ux*L, dy: uy*L}};
+}}
+
+const s13 = Math.sign({prod13});
+const s23 = Math.sign({prod23});
+
+// ✅ Agora F13 e F23 ficam na direção da linha 1–3 e 2–3
+const v13 = vecAlongLineFit(P3, P1, s13, Math.abs({F13}), 160);
+const v23 = vecAlongLineFit(P3, P2, s23, Math.abs({F23}), 160);
+
+// Resultante (pela soma vetorial)
+const vr  = vecPixFit({Fxr}, {Fyr}, 180);
 
 drawArrowPix(P3.px, P3.py, v13.dx, v13.dy, "#d62728", "F₁₃");
 drawDashedComponents(P3.px, P3.py, v13.dx, v13.dy, "#d62728");
@@ -381,7 +435,6 @@ st.header("Forças Eletrostáticas (2D)")
 st.latex(r"F_{13}=K\frac{|q_1q_3|}{r_{13}^2}")
 st.latex(r"F_{23}=K\frac{|q_2q_3|}{r_{23}^2}")
 st.latex(r"K = 9{,}0\times10^9\ \mathrm{N\,m^2/C^2}")
-
 st.markdown("onde **q** são as cargas das partículas, **r** são as distâncias entre elas e **K** é a constante de Coulomb.")
 
 st.subheader("Substituição numérica (módulos)")
@@ -422,10 +475,10 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
 
     st.latex(rf"{label_main} = {mag_s}")
 
-    # ✅ CORREÇÃO: espaço após o segundo \qquad para não virar \qquadF...
+    # componentes + setas (com correção do \qquad para não "grudar" no F)
     st.latex(
         rf"{label_main}x = {fx_s}\ {arrow_x(sig(Fx,2))}"
-        rf"\qquad,\qquad "   # <-- espaço aqui é essencial
+        rf"\qquad,\qquad "
         rf"{label_main}y = {fy_s}\ {arrow_y(sig(Fy,2))}"
     )
 
