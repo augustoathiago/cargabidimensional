@@ -56,79 +56,89 @@ Fmax = max(abs(F13), abs(F23), abs(Fr), 1e-30)
 html = f"""
 <canvas id="c" width="900" height="600" style="border:1px solid #ddd;"></canvas>
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
+const canvas = document.getElementById("canvas2d");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
 
-const W = c.width, H = c.height;
-const xmin = -15, xmax = 15, ymin = -15, ymax = 15;
-const pad = 60;
+const xMin = -15, xMax = 15, yMin = -15, yMax = 15;
+const padL = 60, padR = 30, padT = 25, padB = 55;
 
-function X(x) {{
-  return pad + (x-xmin)/(xmax-xmin)*(W-2*pad);
-}}
-function Y(y) {{
-  return pad + (ymax-y)/(ymax-ymin)*(H-2*pad);
-}}
+function X(x){ return padL + (x-xMin)*(W-padL-padR)/(xMax-xMin); }
+function Y(y){ return padT + (yMax-y)*(H-padT-padB)/(yMax-yMin); }
 
-ctx.clearRect(0,0,W,H);
-
-// eixos
-ctx.beginPath();
-ctx.moveTo(X(xmin), Y(0));
-ctx.lineTo(X(xmax), Y(0));
-ctx.moveTo(X(0), Y(ymin));
-ctx.lineTo(X(0), Y(ymax));
-ctx.stroke();
-
-// partículas
-function particle(x,y,n,color) {{
+// =================== Grade + eixos ===================
+function drawAxes(){
+  ctx.strokeStyle="#eee";
+  for(let t=-14;t<=14;t+=2){
+    ctx.beginPath(); ctx.moveTo(X(t),Y(yMin)); ctx.lineTo(X(t),Y(yMax)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X(xMin),Y(t)); ctx.lineTo(X(xMax),Y(t)); ctx.stroke();
+  }
+  ctx.strokeStyle="#111"; ctx.lineWidth=2;
   ctx.beginPath();
-  ctx.arc(X(x),Y(y),14,0,2*Math.PI);
-  ctx.fillStyle="#fff"; ctx.fill();
+  ctx.moveTo(X(xMin),Y(0)); ctx.lineTo(X(xMax),Y(0));
+  ctx.moveTo(X(0),Y(yMin)); ctx.lineTo(X(0),Y(yMax));
+  ctx.stroke();
+}
+
+// =================== Partículas ===================
+function drawParticle(x,y,n,color){
+  const px=X(x), py=Y(y);
+  ctx.beginPath(); ctx.arc(px,py,16,0,2*Math.PI);
+  ctx.fillStyle="#fafafa"; ctx.fill();
   ctx.strokeStyle=color; ctx.lineWidth=3; ctx.stroke();
-  ctx.fillStyle="#000"; ctx.fillText(n,X(x)-4,Y(y)+4);
-}}
+  ctx.fillStyle="#111"; ctx.font="bold 16px Arial";
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText(n,px,py);
+  return {px,py};
+}
 
-particle({x1},{y1},"1","blue");
-particle({x2},{y2},"2","blue");
-particle({x3},{y3},"3","red");
-
-// ESCALA ÚNICA (a chave da correção)
-const Lmax = 0.4*(W-2*pad);
-const scale = Lmax / {Fmax};
-
-// vetor genérico
-function drawVector(Fx,Fy,color,label) {{
-  const dx = Fx*scale;
-  const dy = -Fy*scale;
-
-  const x0 = X({x3});
-  const y0 = Y({y3});
-
-  ctx.strokeStyle=color;
-  ctx.lineWidth=3;
+// =================== Setas ===================
+function drawArrow(x0,y0,dx,dy,color,label){
+  const x1=x0+dx, y1=y0+dy;
+  ctx.strokeStyle=color; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  const a=Math.atan2(dy,dx), h=10;
   ctx.beginPath();
-  ctx.moveTo(x0,y0);
-  ctx.lineTo(x0+dx,y0+dy);
-  ctx.stroke();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-h*Math.cos(a-Math.PI/6),y1-h*Math.sin(a-Math.PI/6));
+  ctx.lineTo(x1-h*Math.cos(a+Math.PI/6),y1-h*Math.sin(a+Math.PI/6));
+  ctx.fillStyle=color; ctx.fill();
+  ctx.font="14px Arial";
+  ctx.fillText(label,x1+6,y1-6);
+}
 
-  // componentes (corretas!)
-  ctx.setLineDash([6,5]);
-  ctx.beginPath();
-  ctx.moveTo(x0,y0);
-  ctx.lineTo(x0+dx,y0);
-  ctx.stroke();
+// =================== ESCALA FÍSICA CORRETA ===================
 
-  ctx.beginPath();
-  ctx.moveTo(x0+dx,y0);
-  ctx.lineTo(x0+dx,y0+dy);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}}
+// componentes físicas (vindas do Python)
+const Fx13 = {{Fx13}}, Fy13 = {{Fy13}};
+const Fx23 = {{Fx23}}, Fy23 = {{Fy23}};
+const Fxr  = {{Fxr}},  Fyr  = {{Fyr}};
 
-drawVector({Fx13},{Fy13},"red","F13");
-drawVector({Fx23},{Fy23},"blue","F23");
-drawVector({Fxr},{Fyr},"green","Fr");
+// maior componente absoluta
+const Fref = Math.max(
+  Math.abs(Fx13), Math.abs(Fy13),
+  Math.abs(Fx23), Math.abs(Fy23),
+  Math.abs(Fxr),  Math.abs(Fyr),
+  1e-30
+);
+
+// comprimento máximo visual (px)
+const LMAX = 200;
+
+// fator linear N → pixel
+const S = LMAX / Fref;
+
+// =================== Desenho ===================
+drawAxes();
+
+const P1 = drawParticle({{x1}},{{y1}},1,"{{col_p1}}");
+const P2 = drawParticle({{x2}},{{y2}},2,"{{col_p2}}");
+const P3 = drawParticle({{x3}},{{y3}},3,"{{col_p3}}");
+
+// vetores (ESCALA LINEAR)
+drawArrow(P3.px,P3.py, S*Fx13, -S*Fy13, "#d62728", "F₁₃");
+drawArrow(P3.px,P3.py, S*Fx23, -S*Fy23, "#1f77b4", "F₂₃");
+drawArrow(P3.px,P3.py, S*Fxr,  -S*Fyr,  "#2ca02c", "Fᵣ");
 </script>
 """
 components.html(html, height=620)
