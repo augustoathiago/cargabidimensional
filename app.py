@@ -532,4 +532,4 @@ with colA:
                   abs(F13), Fx13, Fy13, th13, r"F_{13}")
 with colB:
     results_block("Força na partícula 3 devido à partícula 2", "#1f77b4",
-                  abs(F23), Fx23, Fy23, th23, r"F_{23
+                  abs(F23), Fx23, Fy23, th23, r"F_{23}")
