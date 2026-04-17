@@ -488,4 +488,3 @@ with colB:
 with colC:
     results_block("Força resultante na partícula 3", "#2ca02c",
                   abs(Fr),  Fxr,  Fyr,  thr,  r"F_{r}")
-``
