@@ -8,8 +8,6 @@ st.set_page_config(page_title="Simulador Força Eletrostática 2D", layout="wide
 K = 9.0e9  # N·m²/C²
 
 # ===================== Helpers =====================
-_sup_map = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
-
 def sig(x, n=2):
     """Retorna x com n algarismos significativos (float)."""
     if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
@@ -29,7 +27,7 @@ def sci_parts(x, n=2):
     return mant, exp
 
 def latex_sci(x, n=2, unit=r"\mathrm{N}"):
-    """Retorna string LaTeX em notação científica, com vírgula (pt-BR) e unidade em \mathrm{}."""
+    """Notação científica LaTeX com vírgula e unidade."""
     if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
         return rf"0\,{unit}"
     mant, exp = sci_parts(x, n=n)
@@ -37,15 +35,29 @@ def latex_sci(x, n=2, unit=r"\mathrm{N}"):
     return rf"{mant_s}\times10^{{{exp}}}\,{unit}"
 
 def latex_sci_no_unit(x, n=2):
-    """Notação científica sem unidade (para distâncias, por ex.)."""
+    """Notação científica LaTeX com vírgula, sem unidade."""
     if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
         return r"0"
     mant, exp = sci_parts(x, n=n)
     mant_s = f"{mant:.{n}g}".replace(".", "{,}")
     return rf"{mant_s}\times10^{{{exp}}}"
 
-def fmt_uC_br(q_uC: float) -> str:
-    return f"{round(q_uC, 2):.2f}".replace(".", ",")
+def latex_charge_C_from_uC(q_uC: float) -> str:
+    """Exibe exatamente o valor do slider (2 casas) como mantissa × 10^{-6} em Coulomb."""
+    if math.isclose(q_uC, 0.0, abs_tol=0.0):
+        return r"0"
+    mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
+    return rf"{mant}\times10^{{-6}}"
+
+def arrow_x(val, tol=0.0):
+    if abs(val) <= tol:
+        return "⟷"
+    return "→" if val > 0 else "←"
+
+def arrow_y(val, tol=0.0):
+    if abs(val) <= tol:
+        return "↕"
+    return "↑" if val > 0 else "↓"
 
 def coulomb_force_2d(qi, qj, xi, yi, xj, yj, K=9e9):
     """
@@ -69,16 +81,6 @@ def color_charge(q):
     if q < -eps:
         return "#1f77b4"  # azul
     return "#111111"
-
-def arrow_x(val, tol=0.0):
-    if abs(val) <= tol:
-        return "⟷"
-    return "→" if val > 0 else "←"
-
-def arrow_y(val, tol=0.0):
-    if abs(val) <= tol:
-        return "↕"
-    return "↑" if val > 0 else "↓"
 
 # ===================== Cabeçalho =====================
 col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
@@ -138,27 +140,25 @@ Fx23, Fy23, F23, th23, r23 = coulomb_force_2d(q3, q2, x3, y3, x2, y2, K=K)
 
 Fxr = Fx13 + Fx23
 Fyr = Fy13 + Fy23
-Fr = math.hypot(Fxr, Fyr)
+Fr  = math.hypot(Fxr, Fyr)
 thr = math.degrees(math.atan2(Fyr, Fxr)) if Fr != 0 else 0.0
 
 # exibição com 2 AS
 Fx13_d, Fy13_d, F13_d = sig(Fx13, 2), sig(Fy13, 2), sig(F13, 2)
 Fx23_d, Fy23_d, F23_d = sig(Fx23, 2), sig(Fy23, 2), sig(F23, 2)
-Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr, 2),  sig(Fyr, 2),  sig(Fr, 2)
-
-equilibrio = (Fr_d == 0.0)
+Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
 
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
 
-# faixa fixa do gráfico (pedido): -15 a 15
+# faixa fixa do gráfico: -15 a 15
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
-ticks = list(range(-15, 16, 5))
+ticks = list(range(-14, 15, 2))  # ticks de 2 em 2 (evita poluição com -15)
 
 col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
-col_p3 = color_charge(q3)  # partícula 3 com borda vermelha/azul pela carga (pedido)
+col_p3 = color_charge(q3)
 
 maxF = max(abs(F13), abs(F23), abs(Fr), 1e-30)
 
@@ -177,7 +177,6 @@ const W = canvas.width, H = canvas.height;
 ctx.fillStyle = "white";
 ctx.fillRect(0,0,W,H);
 
-// limites fixos -15..15
 const xMin = {xMin}, xMax = {xMax}, yMin = {yMin}, yMax = {yMax};
 const padL = 60, padR = 30, padT = 25, padB = 55;
 
@@ -188,8 +187,35 @@ function Y(y) {{
   return padT + (yMax - y) * ((H - padT - padB) / (yMax - yMin));
 }}
 
-// ---------------- Eixos (sem grade) ----------------
+// ---------------- Grade cinza claro (pedido) ----------------
+function drawGrid() {{
+  const ticks = {ticks};
+  ctx.save();
+  ctx.strokeStyle = "#eeeeee";
+  ctx.lineWidth = 1;
+
+  // verticais
+  ticks.forEach(t => {{
+    ctx.beginPath();
+    ctx.moveTo(X(t), Y(yMin));
+    ctx.lineTo(X(t), Y(yMax));
+    ctx.stroke();
+  }});
+  // horizontais
+  ticks.forEach(t => {{
+    ctx.beginPath();
+    ctx.moveTo(X(xMin), Y(t));
+    ctx.lineTo(X(xMax), Y(t));
+    ctx.stroke();
+  }});
+
+  ctx.restore();
+}}
+
+// ---------------- Eixos e ticks ----------------
 function drawAxes() {{
+  drawGrid();
+
   // eixos principais
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 2;
@@ -203,7 +229,7 @@ function drawAxes() {{
   // ticks e labels
   const ticks = {ticks};
   ctx.fillStyle = "#111";
-  ctx.font = "13px Arial";
+  ctx.font = "12px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
@@ -213,7 +239,7 @@ function drawAxes() {{
     ctx.moveTo(X(t), Y(0)-6);
     ctx.lineTo(X(t), Y(0)+6);
     ctx.stroke();
-    ctx.fillText(String(t).replace(".", ","), X(t), Y(0)+10);
+    ctx.fillText(String(t), X(t), Y(0)+10);
   }});
 
   ctx.textAlign = "right";
@@ -224,7 +250,7 @@ function drawAxes() {{
     ctx.moveTo(X(0)-6, Y(t));
     ctx.lineTo(X(0)+6, Y(t));
     ctx.stroke();
-    if (t !== 0) ctx.fillText(String(t).replace(".", ","), X(0)-10, Y(t));
+    if (t !== 0) ctx.fillText(String(t), X(0)-10, Y(t));
   }});
 
   // nomes dos eixos
@@ -255,7 +281,7 @@ function drawParticle(x,y,n,colorBorder) {{
 }}
 
 function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
-  // desenha uma setinha sobre o rótulo para indicar que é vetor (pedido)
+  // setinha sobre o rótulo para indicar vetor
   ctx.save();
   ctx.font = "14px Arial";
   ctx.strokeStyle = color;
@@ -265,7 +291,6 @@ function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
   const w = ctx.measureText(text).width;
   let xLeft = xAnchor;
   if (align === "right") xLeft = xAnchor - w;
-  if (align === "center") xLeft = xAnchor - w/2;
 
   const yArrow = yBaseline - 16;
   ctx.beginPath();
@@ -323,19 +348,19 @@ function drawArrowPix(x0, y0, dx, dy, color, label) {{
 }}
 
 function drawDashedComponents(x0, y0, dx, dy, color) {{
-  // mantém tracejado (pedido), mas sem rótulos (pedido)
+  // tracejado das componentes sem rótulos
   ctx.save();
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
 
-  // componente x (horizontal)
+  // componente x
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x0 + dx, y0);
   ctx.stroke();
 
-  // componente y (vertical a partir do fim de x)
+  // componente y
   ctx.beginPath();
   ctx.moveTo(x0 + dx, y0);
   ctx.lineTo(x0 + dx, y0 + dy);
@@ -345,28 +370,71 @@ function drawDashedComponents(x0, y0, dx, dy, color) {{
   ctx.restore();
 }}
 
+// ============================
+// Limitar vetor para caber no retângulo útil (pedido 7)
+// Sem alterar escala dos eixos: "corta" o comprimento se necessário.
+// ============================
+function maxLenToFit(x0, y0, ux, uy) {{
+  // retângulo útil
+  const xmin = padL, xmax = W - padR;
+  const ymin = padT, ymax = H - padB;
+
+  // evita divisão por zero
+  const eps = 1e-9;
+
+  let tMax = Infinity;
+
+  // interseção com x = xmin / xmax
+  if (Math.abs(ux) > eps) {{
+    const tx1 = (xmin - x0) / ux;
+    const tx2 = (xmax - x0) / ux;
+    const tx = Math.max(Math.min(tx1, tx2), 0); // primeiro t >= 0 que pega borda mais próxima no sentido
+    // mas precisamos do menor t positivo que atinge qualquer borda, então:
+    const candidates = [tx1, tx2].filter(t => t > 0);
+    if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+  }}
+
+  // interseção com y = ymin / ymax
+  if (Math.abs(uy) > eps) {{
+    const ty1 = (ymin - y0) / uy;
+    const ty2 = (ymax - y0) / uy;
+    const candidates = [ty1, ty2].filter(t => t > 0);
+    if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+  }}
+
+  // tMax é a distância paramétrica até sair; aplicamos folga
+  if (!isFinite(tMax)) return 0;
+  return 0.92 * tMax; // folga para não colar na borda
+}}
+
 drawAxes();
 
 const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
 const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
 const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
-// escala de vetores
+// escala base por módulo relativo
 const maxF = {maxF};
-function vecPix(Fx, Fy, maxLen=140) {{
+function vecPixFit(Fx, Fy, maxLen=150) {{
   const mag = Math.hypot(Fx, Fy);
   if (mag === 0) return {{dx:0, dy:0}};
-  const L = maxLen * (mag / maxF);
-  const ux = Fx / mag;
-  const uy = Fy / mag;
-  return {{dx: ux*L, dy: -uy*L}}; // y invertido no canvas
+
+  const Lwanted = maxLen * (mag / maxF);
+
+  // unitário no canvas (y invertido)
+  const ux = (Fx / mag);
+  const uy = (-Fy / mag);
+
+  const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
+  const L = Math.min(Lwanted, Lfit);
+
+  return {{dx: ux*L, dy: uy*L}};
 }}
 
-const v13 = vecPix({Fx13}, {Fy13}, 140);
-const v23 = vecPix({Fx23}, {Fy23}, 140);
-const vr  = vecPix({Fxr},  {Fyr},  160);
+const v13 = vecPixFit({Fx13}, {Fy13}, 160);
+const v23 = vecPixFit({Fx23}, {Fy23}, 160);
+const vr  = vecPixFit({Fxr},  {Fyr},  180);
 
-// desenhar vetores e seus tracejados
 drawArrowPix(P3.px, P3.py, v13.dx, v13.dy, "#d62728", "F₁₃");
 drawDashedComponents(P3.px, P3.py, v13.dx, v13.dy, "#d62728");
 
@@ -379,11 +447,8 @@ drawDashedComponents(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c");
 """
 components.html(html, height=650)
 
-# ===================== Distâncias (nova seção) =====================
+# ===================== Distâncias (sem fórmulas) =====================
 st.header("Distâncias")
-
-st.latex(r"r_{13}=\sqrt{(x_3-x_1)^2+(y_3-y_1)^2}")
-st.latex(r"r_{23}=\sqrt{(x_3-x_2)^2+(y_3-y_2)^2}")
 
 d1, d2 = st.columns(2)
 with d1:
@@ -397,25 +462,39 @@ st.header("Forças Eletrostáticas (2D)")
 st.latex(r"F_{13}=K\frac{|q_1q_3|}{r_{13}^2}")
 st.latex(r"F_{23}=K\frac{|q_2q_3|}{r_{23}^2}")
 
+# K corrigido (não aparece como texto cru)
+st.latex(r"K = 9{,}0\times10^9\ \mathrm{N\cdot m^2/C^2}")
+
 st.markdown(
-    "onde **q** são as cargas das partículas, **r** são as distâncias entre elas e "
-    r"**K** é a constante de Coulomb:  \(K = 9{,}0\times10^9\ \mathrm{N\cdot m^2/C^2}\)."
+    "onde **q** são as cargas das partículas, **r** são as distâncias entre elas e **K** é a constante de Coulomb."
 )
 
-# valores numéricos (módulos)
-# (mantemos F13 e F23 já calculados; aqui exibimos os módulos |F|)
-st.subheader("Valores (módulos)")
-v1, v2 = st.columns(2)
-with v1:
-    st.latex(rf"F_{{13}} = {latex_sci(abs(F13_d), 2, r'\mathrm{{N}}')}")
-with v2:
-    st.latex(rf"F_{{23}} = {latex_sci(abs(F23_d), 2, r'\mathrm{{N}}')}")
+# Substituição numérica
+st.subheader("Substituição numérica")
 
-# ===================== Resultados (módulo, componentes e direção) =====================
+# valores das cargas (em C) a partir dos sliders (µC)
+q1_ltx = latex_charge_C_from_uC(q1_uC)
+q2_ltx = latex_charge_C_from_uC(q2_uC)
+q3_ltx = latex_charge_C_from_uC(q3_uC)
+
+r13_ltx = latex_sci_no_unit(r13, 2)
+r23_ltx = latex_sci_no_unit(r23, 2)
+
+st.latex(
+    rf"F_{{13}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q1_ltx})({q3_ltx})\right|}}{{({r13_ltx})^2}}"
+)
+st.latex(rf"F_{{13}} = {latex_sci(abs(F13_d), 2, r'\mathrm{{N}}')}")
+
+st.latex(
+    rf"F_{{23}} = (9{{,}}0\times10^9)\cdot\frac{{\left|({q2_ltx})({q3_ltx})\right|}}{{({r23_ltx})^2}}"
+)
+st.latex(rf"F_{{23}} = {latex_sci(abs(F23_d), 2, r'\mathrm{{N}}')}")
+
+# ===================== Resultados =====================
 st.header("Resultados (módulo, componentes e direção)")
 
 def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
-    # latex
+    # strings latex
     mag_s = latex_sci(sig(Fmag, 2), 2, r"\mathrm{N}")
     fx_s  = latex_sci(sig(Fx,   2), 2, r"\mathrm{N}")
     fy_s  = latex_sci(sig(Fy,   2), 2, r"\mathrm{N}")
@@ -432,30 +511,25 @@ def results_block(title, color, Fmag, Fx, Fy, theta, label_main):
         """,
         unsafe_allow_html=True
     )
+
+    # módulo
     st.latex(rf"{label_main} = {mag_s}")
-    st.latex(rf"{label_main}x = {fx_s}\quad,\quad {label_main}y = {fy_s}")
-    st.latex(rf"\theta = {th_s}^\circ")
+
+    # componentes com setas ao lado (pedido 1)
+    # (usa math inline + unicode setas)
     st.markdown(
-        f"<div style='margin-top:-6px;color:#555;font-size:13px;'>"
-        f"Direção: <b>x</b> {arrow_x(sig(Fx,2))} &nbsp;&nbsp; <b>y</b> {arrow_y(sig(Fy,2))}"
-        f"</div>",
+        rf"$ {label_main}x = {fx_s}\ $ **{arrow_x(sig(Fx,2))}**"
+        rf"&nbsp;&nbsp;&nbsp;&nbsp;"
+        rf"$ {label_main}y = {fy_s}\ $ **{arrow_y(sig(Fy,2))}**",
         unsafe_allow_html=True
     )
 
+    st.latex(rf"\theta = {th_s}^\circ")
+
 colA, colB, colC = st.columns(3)
 with colA:
-    results_block("Força na partícula 3 devido à partícula 1",
-                  "#d62728", abs(F13), Fx13, Fy13, th13, r"F_{13}")
+    results_block("Força na partícula 3 devido à partícula 1", "#d62728",
+                  abs(F13), Fx13, Fy13, th13, r"F_{13}")
 with colB:
-    results_block("Força na partícula 3 devido à partícula 2",
-                  "#1f77b4", abs(F23), Fx23, Fy23, th23, r"F_{23}")
-with colC:
-    results_block("Força resultante na partícula 3",
-                  "#2ca02c", abs(Fr),  Fxr,  Fyr,  thr,  r"F_{r}")
-
-# ===================== Equilíbrio =====================
-st.subheader("Equilíbrio")
-
-if equilibrio:
-    st.success("✅ A partícula 3 está em equilíbrio (com 2 algarismos significativos).")
-    st.latex(r"\vec{F}_r \approx 0")
+    results_block("Força na partícula 3 devido à partícula 2", "#1f77b4",
+                  abs(F23), Fx23, Fy23, th23, r"F_{23
