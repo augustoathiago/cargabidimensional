@@ -580,4 +580,3 @@ if equilibrio:
     st.success("✅ A partícula 3 está em **equilíbrio** (com 2 algarismos significativos, \\(\\vec F_r \\approx 0\\)).")
 else:
     st.info("ℹ️ Ajuste posições e cargas para buscar \\(\\vec F_r \\approx 0\\).")
-``
