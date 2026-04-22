@@ -4,6 +4,19 @@ import math
 
 st.set_page_config(page_title="Simulador Força Eletrostática 2D", layout="wide")
 
+# ===================== CSS (melhor uso no mobile) =====================
+st.markdown(
+    """
+    <style>
+      /* Ajusta margens/padding em telas menores */
+      @media (max-width: 768px){
+        .block-container { padding-left: 0.8rem; padding-right: 0.8rem; }
+      }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # ===================== Constantes =====================
 K = 9.0e9  # N·m²/C²
 
@@ -148,12 +161,9 @@ Fx13_d, Fy13_d, F13_d = sig(Fx13, 2), sig(Fy13, 2), sig(F13, 2)
 Fx23_d, Fy23_d, F23_d = sig(Fx23, 2), sig(Fy23, 2), sig(F23, 2)
 Fxr_d,  Fyr_d,  Fr_d  = sig(Fxr,  2), sig(Fyr,  2), sig(Fr,  2)
 
-# produtos para sentido (atração/repulsão) se precisar no futuro
-prod13 = q1 * q3
-prod23 = q2 * q3
-
 # ===================== Figura (Canvas) =====================
 st.header("Figura – Sistema Bidimensional")
+st.caption("📱 No celular: deslize para o lado (horizontal) para ver toda a figura.")
 
 xMin, xMax = -15, 15
 yMin, yMax = -15, 15
@@ -163,267 +173,339 @@ col_p1 = color_charge(q1)
 col_p2 = color_charge(q2)
 col_p3 = color_charge(q3)
 
+# Tamanho lógico do canvas (em CSS px). Mantemos grande para leitura e habilitamos scroll.
+CANVAS_CSS_W = 920
+CANVAS_CSS_H = 620
+
 html = f"""
-<div style="background:white;padding:6px;border-radius:14px;border:1px solid #eee;">
-  <canvas id="canvas2d" width="920" height="620"
-    style="background:white;border:1px solid #e9e9e9;display:block;border-radius:12px;"></canvas>
-</div>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  html, body {{
+    margin: 0; padding: 0;
+    background: transparent;
+    font-family: Arial, sans-serif;
+  }}
+
+  /* Contêiner com rolagem horizontal (swipe no mobile) */
+  .frame {{
+    background: white;
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid #eee;
+  }}
+
+  .scroll-x {{
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    border-radius: 12px;
+  }}
+
+  /* Dica visual sutil de que existe scroll lateral */
+  .hint {{
+    position: relative;
+  }}
+  .hint:after {{
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    top: 0; right: 0;
+    width: 26px; height: 100%;
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.95));
+  }}
+
+  canvas {{
+    background: white;
+    border: 1px solid #e9e9e9;
+    display: block;
+    border-radius: 12px;
+
+    /* Importante: não deixar o canvas "encolher" */
+    max-width: none;
+  }}
+</style>
+</head>
+
+<body>
+  <div class="frame">
+    <div class="scroll-x hint">
+      <canvas id="canvas2d"></canvas>
+    </div>
+  </div>
 
 <script>
-const canvas = document.getElementById("canvas2d");
-const ctx = canvas.getContext("2d");
-const W = canvas.width, H = canvas.height;
+  const canvas = document.getElementById("canvas2d");
+  const ctx = canvas.getContext("2d");
 
-ctx.fillStyle = "white";
-ctx.fillRect(0,0,W,H);
+  // =====================================================
+  // ✅ NITIDEZ EM TELAS RETINA (celulares)
+  // - define tamanho "CSS" e multiplica pelo devicePixelRatio
+  // - mantém coordenadas e cálculos em pixels "CSS"
+  // =====================================================
+  const cssW = {CANVAS_CSS_W};
+  const cssH = {CANVAS_CSS_H};
+  const dpr = window.devicePixelRatio || 1;
 
-const xMin = {xMin}, xMax = {xMax}, yMin = {yMin}, yMax = {yMax};
-const padL = 60, padR = 30, padT = 25, padB = 55;
+  canvas.style.width = cssW + "px";
+  canvas.style.height = cssH + "px";
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // escala o desenho para ficar nítido
 
-// =====================================================
-// ✅ ESCALA ISOMÉTRICA (ticks iguais em X e Y)
-// =====================================================
-const plotW = (W - padL - padR);
-const plotH = (H - padT - padB);
-const rangeX = (xMax - xMin);
-const rangeY = (yMax - yMin);
+  const W = cssW, H = cssH;
 
-const scaleX = plotW / rangeX;
-const scaleY = plotH / rangeY;
-const scale  = Math.min(scaleX, scaleY);
+  ctx.fillStyle = "white";
+  ctx.fillRect(0,0,W,H);
 
-const extraX = plotW - scale * rangeX;
-const extraY = plotH - scale * rangeY;
+  const xMin = {xMin}, xMax = {xMax}, yMin = {yMin}, yMax = {yMax};
+  const padL = 60, padR = 30, padT = 25, padB = 55;
 
-function X(x) {{
-  return padL + extraX/2 + (x - xMin) * scale;
-}}
-function Y(y) {{
-  return padT + extraY/2 + (yMax - y) * scale;
-}}
+  // =====================================================
+  // ✅ ESCALA ISOMÉTRICA (ticks iguais em X e Y)
+  // =====================================================
+  const plotW = (W - padL - padR);
+  const plotH = (H - padT - padB);
+  const rangeX = (xMax - xMin);
+  const rangeY = (yMax - yMin);
 
-// ---------------- Grade cinza claro ----------------
-function drawGrid() {{
-  const ticks = {ticks};
-  ctx.save();
-  ctx.strokeStyle = "#eeeeee";
-  ctx.lineWidth = 1;
+  const scaleX = plotW / rangeX;
+  const scaleY = plotH / rangeY;
+  const scale  = Math.min(scaleX, scaleY);
 
-  ticks.forEach(t => {{
+  const extraX = plotW - scale * rangeX;
+  const extraY = plotH - scale * rangeY;
+
+  function X(x) {{
+    return padL + extraX/2 + (x - xMin) * scale;
+  }}
+  function Y(y) {{
+    return padT + extraY/2 + (yMax - y) * scale;
+  }}
+
+  // ---------------- Grade cinza claro ----------------
+  function drawGrid() {{
+    const ticks = {ticks};
+    ctx.save();
+    ctx.strokeStyle = "#eeeeee";
+    ctx.lineWidth = 1;
+
+    ticks.forEach(t => {{
+      ctx.beginPath();
+      ctx.moveTo(X(t), Y(yMin));
+      ctx.lineTo(X(t), Y(yMax));
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(X(xMin), Y(t));
+      ctx.lineTo(X(xMax), Y(t));
+      ctx.stroke();
+    }});
+    ctx.restore();
+  }}
+
+  // ---------------- Eixos e ticks ----------------
+  function drawAxes() {{
+    drawGrid();
+
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(X(t), Y(yMin));
-    ctx.lineTo(X(t), Y(yMax));
+    ctx.moveTo(X(xMin), Y(0)); ctx.lineTo(X(xMax), Y(0));
+    ctx.moveTo(X(0), Y(yMin)); ctx.lineTo(X(0), Y(yMax));
     ctx.stroke();
 
+    const ticks = {ticks};
+    ctx.fillStyle = "#111";
+    ctx.font = "12px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    ticks.forEach(t => {{
+      ctx.beginPath(); ctx.moveTo(X(t), Y(0)-6); ctx.lineTo(X(t), Y(0)+6); ctx.stroke();
+      ctx.fillText(String(t), X(t), Y(0)+10);
+    }});
+
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ticks.forEach(t => {{
+      ctx.beginPath(); ctx.moveTo(X(0)-6, Y(t)); ctx.lineTo(X(0)+6, Y(t)); ctx.stroke();
+      if (t !== 0) ctx.fillText(String(t), X(0)-10, Y(t));
+    }});
+
+    ctx.textAlign = "right";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("x (m)", X(xMax), Y(0)-10);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("y (m)", X(0)+10, Y(yMax));
+  }}
+
+  function drawParticle(x,y,n,colorBorder) {{
+    const px = X(x), py = Y(y);
+    ctx.fillStyle = "#fafafa";
+    ctx.strokeStyle = colorBorder;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(px, py, 16, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#111";
+    ctx.font = "bold 16px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(n), px, py);
+    return {{px, py}};
+  }}
+
+  function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
+    ctx.save();
+    ctx.font = "14px Arial";
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    const w = ctx.measureText(text).width;
+    let xLeft = xAnchor;
+    if (align === "right") xLeft = xAnchor - w;
+    const yArrow = yBaseline - 16;
+
+    ctx.beginPath(); ctx.moveTo(xLeft, yArrow); ctx.lineTo(xLeft + w, yArrow); ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(X(xMin), Y(t));
-    ctx.lineTo(X(xMax), Y(t));
-    ctx.stroke();
-  }});
-  ctx.restore();
-}}
-
-// ---------------- Eixos e ticks ----------------
-function drawAxes() {{
-  drawGrid();
-
-  ctx.strokeStyle = "#111";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(X(xMin), Y(0)); ctx.lineTo(X(xMax), Y(0));
-  ctx.moveTo(X(0), Y(yMin)); ctx.lineTo(X(0), Y(yMax));
-  ctx.stroke();
-
-  const ticks = {ticks};
-  ctx.fillStyle = "#111";
-  ctx.font = "12px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-
-  ticks.forEach(t => {{
-    ctx.beginPath(); ctx.moveTo(X(t), Y(0)-6); ctx.lineTo(X(t), Y(0)+6); ctx.stroke();
-    ctx.fillText(String(t), X(t), Y(0)+10);
-  }});
-
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  ticks.forEach(t => {{
-    ctx.beginPath(); ctx.moveTo(X(0)-6, Y(t)); ctx.lineTo(X(0)+6, Y(t)); ctx.stroke();
-    if (t !== 0) ctx.fillText(String(t), X(0)-10, Y(t));
-  }});
-
-  ctx.textAlign = "right";
-  ctx.textBaseline = "bottom";
-  ctx.fillText("x (m)", X(xMax), Y(0)-10);
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillText("y (m)", X(0)+10, Y(yMax));
-}}
-
-function drawParticle(x,y,n,colorBorder) {{
-  const px = X(x), py = Y(y);
-  ctx.fillStyle = "#fafafa";
-  ctx.strokeStyle = colorBorder;
-  ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(px, py, 16, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#111";
-  ctx.font = "bold 16px Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(n), px, py);
-  return {{px, py}};
-}}
-
-function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
-  ctx.save();
-  ctx.font = "14px Arial";
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 2;
-  const w = ctx.measureText(text).width;
-  let xLeft = xAnchor;
-  if (align === "right") xLeft = xAnchor - w;
-  const yArrow = yBaseline - 16;
-
-  ctx.beginPath(); ctx.moveTo(xLeft, yArrow); ctx.lineTo(xLeft + w, yArrow); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(xLeft + w, yArrow);
-  ctx.lineTo(xLeft + w - 6, yArrow - 4);
-  ctx.lineTo(xLeft + w - 6, yArrow + 4);
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
-}}
-
-function drawArrowPix(x0, y0, dx, dy, color, label) {{
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 3;
-
-  const x1 = x0 + dx, y1 = y0 + dy;
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-
-  const ang = Math.atan2(dy, dx);
-  const head = 10;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x1 - head*Math.cos(ang - Math.PI/6), y1 - head*Math.sin(ang - Math.PI/6));
-  ctx.lineTo(x1 - head*Math.cos(ang + Math.PI/6), y1 - head*Math.sin(ang + Math.PI/6));
-  ctx.closePath(); ctx.fill();
-
-  ctx.font = "14px Arial";
-  const align = (dx >= 0) ? "left" : "right";
-  ctx.textAlign = align;
-  ctx.textBaseline = "bottom";
-  const xText = x1 + (dx >= 0 ? 8 : -8);
-  const yText = y1 - 6;
-  ctx.fillText(label, xText, yText);
-  drawVectorOverLabel(label, xText, yText, align, color);
-
-  ctx.restore();
-}}
-
-function drawDashedComponents(x0, y0, dx, dy, color) {{
-  ctx.save();
-  ctx.setLineDash([6, 5]);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx, y0); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x0 + dx, y0); ctx.lineTo(x0 + dx, y0 + dy); ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.restore();
-}}
-
-// --------- limitador geométrico: garante que o vetor cabe ----------
-function maxLenToFit(x0, y0, ux, uy) {{
-  const xmin = padL, xmax = W - padR;
-  const ymin = padT, ymax = H - padB;
-  const eps = 1e-9;
-  let tMax = Infinity;
-
-  if (Math.abs(ux) > eps) {{
-    const tx1 = (xmin - x0) / ux;
-    const tx2 = (xmax - x0) / ux;
-    const candidates = [tx1, tx2].filter(t => t > 0);
-    if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+    ctx.moveTo(xLeft + w, yArrow);
+    ctx.lineTo(xLeft + w - 6, yArrow - 4);
+    ctx.lineTo(xLeft + w - 6, yArrow + 4);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
   }}
-  if (Math.abs(uy) > eps) {{
-    const ty1 = (ymin - y0) / uy;
-    const ty2 = (ymax - y0) / uy;
-    const candidates = [ty1, ty2].filter(t => t > 0);
-    if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+
+  function drawArrowPix(x0, y0, dx, dy, color, label) {{
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 3;
+
+    const x1 = x0 + dx, y1 = y0 + dy;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+
+    const ang = Math.atan2(dy, dx);
+    const head = 10;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - head*Math.cos(ang - Math.PI/6), y1 - head*Math.sin(ang - Math.PI/6));
+    ctx.lineTo(x1 - head*Math.cos(ang + Math.PI/6), y1 - head*Math.sin(ang + Math.PI/6));
+    ctx.closePath(); ctx.fill();
+
+    ctx.font = "14px Arial";
+    const align = (dx >= 0) ? "left" : "right";
+    ctx.textAlign = align;
+    ctx.textBaseline = "bottom";
+    const xText = x1 + (dx >= 0 ? 8 : -8);
+    const yText = y1 - 6;
+    ctx.fillText(label, xText, yText);
+    drawVectorOverLabel(label, xText, yText, align, color);
+
+    ctx.restore();
   }}
-  if (!isFinite(tMax)) return 0;
-  return 0.92 * tMax;
-}}
 
-drawAxes();
-const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
-const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
-const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
+  function drawDashedComponents(x0, y0, dx, dy, color) {{
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
 
-// =====================================================
-// ✅ ESCALA DOS VETORES (CORRETA): mesma escala linear para Fx/Fy
-// usando a folga do gráfico (-15..15) vs partículas (-10..10)
-// =====================================================
-const Fx13 = {Fx13}, Fy13 = {Fy13};
-const Fx23 = {Fx23}, Fy23 = {Fy23};
-const Fxr  = {Fxr},  Fyr  = {Fyr};
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + dx, y0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0 + dx, y0); ctx.lineTo(x0 + dx, y0 + dy); ctx.stroke();
 
-// maior componente absoluta (referência)
-const Fref = Math.max(
-  Math.abs(Fx13), Math.abs(Fy13),
-  Math.abs(Fx23), Math.abs(Fy23),
-  Math.abs(Fxr),  Math.abs(Fyr),
-  1e-30
-);
-
-// comprimento máximo desejado em "metros do gráfico"
-const Lworld_max = 4.0;                 // m (cabe bem na folga)
-const LmaxPx = scale * Lworld_max;      // px (usa a MESMA escala do gráfico)
-
-// fator N -> px
-const S = LmaxPx / Fref;
-
-// converte força -> vetor em px, com clipping por borda
-function vecFromForce(Fx, Fy) {{
-  let dx = S * Fx;
-  let dy = -S * Fy; // y invertido no canvas
-
-  const mag = Math.hypot(dx, dy);
-  if (mag === 0) return {{dx:0, dy:0}};
-
-  const ux = dx / mag;
-  const uy = dy / mag;
-
-  const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
-  if (mag > Lfit && Lfit > 0) {{
-    const k = Lfit / mag;
-    dx *= k;
-    dy *= k;
+    ctx.setLineDash([]);
+    ctx.restore();
   }}
-  return {{dx, dy}};
-}}
 
-const v13 = vecFromForce(Fx13, Fy13);
-const v23 = vecFromForce(Fx23, Fy23);
-const vr  = vecFromForce(Fxr,  Fyr);
+  // --------- limitador geométrico: garante que o vetor cabe ----------
+  function maxLenToFit(x0, y0, ux, uy) {{
+    const xmin = padL, xmax = W - padR;
+    const ymin = padT, ymax = H - padB;
+    const eps = 1e-9;
+    let tMax = Infinity;
 
-// desenha vetores + componentes
-drawArrowPix(P3.px, P3.py, v13.dx, v13.dy, "#d62728", "F₁₃");
-drawDashedComponents(P3.px, P3.py, v13.dx, v13.dy, "#d62728");
+    if (Math.abs(ux) > eps) {{
+      const tx1 = (xmin - x0) / ux;
+      const tx2 = (xmax - x0) / ux;
+      const candidates = [tx1, tx2].filter(t => t > 0);
+      if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+    }}
+    if (Math.abs(uy) > eps) {{
+      const ty1 = (ymin - y0) / uy;
+      const ty2 = (ymax - y0) / uy;
+      const candidates = [ty1, ty2].filter(t => t > 0);
+      if (candidates.length) tMax = Math.min(tMax, Math.min(...candidates));
+    }}
+    if (!isFinite(tMax)) return 0;
+    return 0.92 * tMax;
+  }}
 
-drawArrowPix(P3.px, P3.py, v23.dx, v23.dy, "#1f77b4", "F₂₃");
-drawDashedComponents(P3.px, P3.py, v23.dx, v23.dy, "#1f77b4");
+  drawAxes();
+  const P1 = drawParticle({x1}, {y1}, 1, "{col_p1}");
+  const P2 = drawParticle({x2}, {y2}, 2, "{col_p2}");
+  const P3 = drawParticle({x3}, {y3}, 3, "{col_p3}");
 
-drawArrowPix(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c", "Fᵣ");
-drawDashedComponents(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c");
+  // =====================================================
+  // ✅ ESCALA DOS VETORES (CORRETA): mesma escala linear para Fx/Fy
+  // =====================================================
+  const Fx13 = {Fx13}, Fy13 = {Fy13};
+  const Fx23 = {Fx23}, Fy23 = {Fy23};
+  const Fxr  = {Fxr},  Fyr  = {Fyr};
+
+  const Fref = Math.max(
+    Math.abs(Fx13), Math.abs(Fy13),
+    Math.abs(Fx23), Math.abs(Fy23),
+    Math.abs(Fxr),  Math.abs(Fyr),
+    1e-30
+  );
+
+  const Lworld_max = 4.0;            // m
+  const LmaxPx = scale * Lworld_max; // px
+  const S = LmaxPx / Fref;           // N -> px
+
+  function vecFromForce(Fx, Fy) {{
+    let dx = S * Fx;
+    let dy = -S * Fy; // y invertido no canvas
+
+    const mag = Math.hypot(dx, dy);
+    if (mag === 0) return {{dx:0, dy:0}};
+
+    const ux = dx / mag;
+    const uy = dy / mag;
+
+    const Lfit = maxLenToFit(P3.px, P3.py, ux, uy);
+    if (mag > Lfit && Lfit > 0) {{
+      const k = Lfit / mag;
+      dx *= k;
+      dy *= k;
+    }}
+    return {{dx, dy}};
+  }}
+
+  const v13 = vecFromForce(Fx13, Fy13);
+  const v23 = vecFromForce(Fx23, Fy23);
+  const vr  = vecFromForce(Fxr,  Fyr);
+
+  drawArrowPix(P3.px, P3.py, v13.dx, v13.dy, "#d62728", "F₁₃");
+  drawDashedComponents(P3.px, P3.py, v13.dx, v13.dy, "#d62728");
+
+  drawArrowPix(P3.px, P3.py, v23.dx, v23.dy, "#1f77b4", "F₂₃");
+  drawDashedComponents(P3.px, P3.py, v23.dx, v23.dy, "#1f77b4");
+
+  drawArrowPix(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c", "Fᵣ");
+  drawDashedComponents(P3.px, P3.py, vr.dx,  vr.dy,  "#2ca02c");
 </script>
+</body>
+</html>
 """
 
-components.html(html, height=650)
+# height do iframe: um pouco maior que o canvas + bordas
+components.html(html, height=700)
 
 # ===================== Distâncias (só valores) =====================
 st.header("Distâncias")
